@@ -5,7 +5,7 @@ import {
   VideoConference,
   useStartAudio,
 } from "@livekit/components-react";
-import { Channel } from "@prisma/client";
+import { Channel } from "@/types/cassandra";
 import { useUser } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
 

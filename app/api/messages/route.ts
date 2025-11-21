@@ -1,13 +1,13 @@
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
-import { Message } from "@prisma/client";
+import { MessageWithMember, messageFromChannelToMessage } from "@/types/cassandra";
 import { NextResponse } from "next/server";
 
 const MESSAGES_PER_PAGE = 10;
 
 export async function GET(req: Request) {
   try {
-    const profile = currentProfile();
+    const profile = await currentProfile();
     if (!profile) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -17,50 +17,30 @@ export async function GET(req: Request) {
     if (!channelId) {
       return new NextResponse("Channel ID Missing", { status: 400 });
     }
-    let messages: Message[];
+
+    let query = 'SELECT * FROM messages_by_channel WHERE channel_id = ?';
+    const params: any[] = [channelId];
+
     if (cursor) {
-      messages = await db.message.findMany({
-        take: MESSAGES_PER_PAGE,
-        skip: 1,
-        cursor: {
-          id: cursor,
-        },
-        where: {
-          channelId,
-        },
-        include: {
-          member: {
-            include: {
-              profile: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-    } else {
-      messages = await db.message.findMany({
-        take: MESSAGES_PER_PAGE,
-        where: {
-          channelId,
-        },
-        include: {
-          member: {
-            include: {
-              profile: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+      // Parse cursor timestamp for pagination
+      const cursorDate = new Date(cursor);
+      query += ' AND created_at < ?';
+      params.push(cursorDate);
     }
+
+    query += ' LIMIT ?';
+    params.push(MESSAGES_PER_PAGE);
+
+    const result = await db.execute(query, params, { prepare: true });
+    
+    const messages: MessageWithMember[] = result.rows.map(row => messageFromChannelToMessage(row));
+
     let nextCursor = null;
     if (messages.length === MESSAGES_PER_PAGE) {
-      nextCursor = messages[MESSAGES_PER_PAGE - 1].id;
+      // Use timestamp as cursor for next page
+      nextCursor = messages[MESSAGES_PER_PAGE - 1].createdAt.toISOString();
     }
+    
     return NextResponse.json({
       item: messages,
       nextCursor,

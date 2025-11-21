@@ -1,5 +1,5 @@
 "use client";
-import { Profile, Server } from "@prisma/client";
+import { Profile, Server } from "@/types/cassandra";
 import Image from "next/image";
 import React from "react";
 

@@ -24,25 +24,46 @@ const Page = async ({ params, searchParams }: PageProps) => {
   if (!profile) {
     return redirectToSignIn();
   }
-  const currentMember = await db.member.findFirst({
-    where: {
-      serverId: params.serverId,
-      profileId: profile.id,
-    },
-    include: {
-      profile: true,
-    },
-  });
-  if (!currentMember) {
+  
+  // Get current member
+  const currentMemberResult = await db.execute(
+    'SELECT * FROM members_by_profile_and_server WHERE server_id = ? AND profile_id = ?',
+    [params.serverId, profile.id],
+    { prepare: true }
+  );
+  
+  if (currentMemberResult.rows.length === 0) {
     return redirect("/");
   }
+  
+  const currentMemberRow = currentMemberResult.rows[0];
+  const currentMember = {
+    id: currentMemberRow.id,
+    role: currentMemberRow.role,
+    profileId: currentMemberRow.profile_id,
+    serverId: currentMemberRow.server_id,
+    createdAt: currentMemberRow.created_at,
+    updatedAt: currentMemberRow.updated_at,
+    profile: {
+      id: profile.id,
+      userId: profile.userId,
+      name: profile.name,
+      imageUrl: profile.imageUrl,
+      email: profile.email,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt
+    }
+  };
+  
   const conversation = await getOrCreateConversation(
     currentMember.id,
     params.memberId
   );
+  
   if (!conversation) {
     return redirect(`/servers/${params.serverId}`);
   }
+  
   const { memberOne, memberTwo } = conversation;
   const otherMember =
     memberOne.profileId === profile.id ? memberTwo : memberOne;

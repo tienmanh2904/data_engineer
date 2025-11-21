@@ -2,6 +2,7 @@ import { currentProfilePages } from "@/lib/currentProfilePage";
 import { db } from "@/lib/db";
 import { NextApiResponseServerIO } from "@/types/ServerType";
 import { NextApiRequest } from "next";
+import { v4 as uuidv4 } from "uuid";
 
 export default async function handler(
   req: NextApiRequest,
@@ -26,64 +27,83 @@ export default async function handler(
         .json({ message: "Content or file url is required" });
     }
 
-    const conversation = await db.conversation.findFirst({
-      where: {
-        id: conversationId as string,
-        OR: [
-          {
-            memberOne: {
-              profileId: profile.id,
-            },
-          },
-          {
-            memberTwo: {
-              profileId: profile.id,
-            },
-          },
-        ],
-      },
-      include: {
-        memberOne: {
-          include: {
-            profile: true,
-          },
-        },
-        memberTwo: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-    });
+    // Get conversation
+    const conversationResult = await db.execute(
+      'SELECT * FROM conversations_by_id WHERE id = ?',
+      [conversationId as string],
+      { prepare: true }
+    );
 
-    if (!conversation) {
+    if (conversationResult.rows.length === 0) {
       return res.status(404).json({ message: "Conversation not found" });
     }
 
-    const member =
-      conversation.memberOne.profileId === profile.id
-        ? conversation.memberOne
-        : conversation.memberTwo;
+    const conversation = conversationResult.rows[0];
 
-    if (!member) {
-      return res.status(404).json({ message: "Member Not Found" });
+    // Verify user is part of conversation
+    const memberOneResult = await db.execute(
+      'SELECT * FROM members_by_id WHERE id = ?',
+      [conversation.member_one_id],
+      { prepare: true }
+    );
+
+    const memberTwoResult = await db.execute(
+      'SELECT * FROM members_by_id WHERE id = ?',
+      [conversation.member_two_id],
+      { prepare: true }
+    );
+
+    if (memberOneResult.rows.length === 0 || memberTwoResult.rows.length === 0) {
+      return res.status(404).json({ message: "Members not found" });
     }
 
-    const message = await db.directMessage.create({
-      data: {
-        content,
-        fileUrl,
-        conversationId: conversationId as string,
-        memberId: member.id,
-      },
-      include: {
-        member: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-    });
+    const memberOne = memberOneResult.rows[0];
+    const memberTwo = memberTwoResult.rows[0];
+
+    const member = memberOne.profile_id === profile.id ? memberOne : 
+                   memberTwo.profile_id === profile.id ? memberTwo : null;
+
+    if (!member) {
+      return res.status(403).json({ message: "Not part of this conversation" });
+    }
+
+    const messageId = uuidv4();
+    const now = new Date();
+
+    // Insert direct message with denormalized data
+    await db.execute(
+      'INSERT INTO direct_messages_by_conversation (conversation_id, created_at, id, content, file_url, member_id, member_profile_id, member_profile_name, member_profile_image_url, deleted, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [conversationId, now, messageId, content, fileUrl || null, member.id, profile.id, profile.name, profile.imageUrl, false, now],
+      { prepare: true }
+    );
+
+    const message = {
+      id: messageId,
+      content,
+      fileUrl: fileUrl || null,
+      memberId: member.id,
+      conversationId: conversationId as string,
+      deleted: false,
+      createdAt: now,
+      updatedAt: now,
+      member: {
+        id: member.id,
+        role: member.role,
+        profileId: profile.id,
+        serverId: member.server_id,
+        createdAt: member.created_at,
+        updatedAt: member.updated_at,
+        profile: {
+          id: profile.id,
+          userId: profile.userId,
+          name: profile.name,
+          imageUrl: profile.imageUrl,
+          email: profile.email,
+          createdAt: profile.createdAt,
+          updatedAt: profile.updatedAt
+        }
+      }
+    };
 
     const channelKey = `chat:${conversationId}:messages`;
     res?.socket?.server?.io?.emit(channelKey, message);

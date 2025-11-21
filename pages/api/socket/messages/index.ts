@@ -2,6 +2,7 @@ import { currentProfilePages } from "@/lib/currentProfilePage";
 import { db } from "@/lib/db";
 import { NextApiResponseServerIO } from "@/types/ServerType";
 import { NextApiRequest } from "next";
+import { v4 as uuidv4 } from "uuid";
 
 export default async function handler(
   req: NextApiRequest,
@@ -29,58 +30,67 @@ export default async function handler(
         .json({ message: "Content or file url is required" });
     }
 
-    const server = await db.server.findFirst({
-      where: {
-        id: serverId as string,
-        members: {
-          some: {
-            profileId: profile.id,
-          },
-        },
-      },
-      include: {
-        members: true,
-      },
-    });
+    // Verify server membership
+    const memberResult = await db.execute(
+      'SELECT * FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
+      [profile.id, serverId as string],
+      { prepare: true }
+    );
 
-    if (!server) {
-      return res.status(404).json({ message: "Server not found" });
+    if (memberResult.rows.length === 0) {
+      return res.status(403).json({ message: "Not a member of this server" });
     }
 
-    const channel = await db.channel.findFirst({
-      where: {
-        id: channelId as string,
-        serverId: server.id,
-      },
-    });
+    const member = memberResult.rows[0];
 
-    if (!channel) {
+    // Verify channel exists
+    const channelResult = await db.execute(
+      'SELECT * FROM channels_by_id WHERE id = ? AND server_id = ?',
+      [channelId as string, serverId as string],
+      { prepare: true }
+    );
+
+    if (channelResult.rows.length === 0) {
       return res.status(404).json({ message: "Channel not found" });
     }
 
-    const member = server.members.find(
-      (member) => member.profileId === profile.id
+    const messageId = uuidv4();
+    const now = new Date();
+
+    // Insert message with denormalized member and profile data
+    await db.execute(
+      'INSERT INTO messages_by_channel (channel_id, created_at, id, content, file_url, member_id, member_profile_id, member_profile_name, member_profile_image_url, member_role, deleted, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [channelId, now, messageId, content, fileUrl || null, member.id, profile.id, profile.name, profile.imageUrl, member.role, false, now],
+      { prepare: true }
     );
 
-    if (!member) {
-      return res.status(404).json({ message: "Member Not Found" });
-    }
-
-    const message = await db.message.create({
-      data: {
-        content,
-        fileUrl,
-        channelId: channelId as string,
-        memberId: member.id,
-      },
-      include: {
-        member: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-    });
+    const message = {
+      id: messageId,
+      content,
+      fileUrl: fileUrl || null,
+      memberId: member.id,
+      channelId: channelId as string,
+      deleted: false,
+      createdAt: now,
+      updatedAt: now,
+      member: {
+        id: member.id,
+        role: member.role,
+        profileId: profile.id,
+        serverId: serverId as string,
+        createdAt: member.created_at,
+        updatedAt: member.updated_at,
+        profile: {
+          id: profile.id,
+          userId: profile.userId,
+          name: profile.name,
+          imageUrl: profile.imageUrl,
+          email: profile.email,
+          createdAt: profile.createdAt,
+          updatedAt: profile.updatedAt
+        }
+      }
+    };
 
     const channelKey = `chat:${channelId}:messages`;
     res?.socket?.server?.io?.emit(channelKey, message);

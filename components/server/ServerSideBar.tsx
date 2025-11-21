@@ -1,6 +1,6 @@
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
-import { ChannelType, MemberRole } from "@prisma/client";
+import { ChannelType, MemberRole } from "@/types/cassandra";
 import { redirect } from "next/navigation";
 import React from "react";
 import ServerHeader from "./ServerHeader";
@@ -36,45 +36,85 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
   if (!profile) {
     return redirect("/");
   }
-  const server = await db.server.findUnique({
-    where: {
-      id: serverId,
-    },
-    include: {
-      channels: {
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
-      members: {
-        include: {
-          profile: true,
-        },
-        orderBy: {
-          role: "asc",
-        },
-      },
-    },
-  });
+  
+  // Get server
+  const serverResult = await db.execute(
+    'SELECT * FROM servers_by_id WHERE id = ?',
+    [serverId],
+    { prepare: true }
+  );
 
-  if (!server) {
+  if (serverResult.rows.length === 0) {
     return redirect("/");
   }
 
-  const textChannels = server?.channels.filter(
+  const serverRow = serverResult.rows[0];
+  const server = {
+    id: serverRow.id,
+    name: serverRow.name,
+    imageUrl: serverRow.image_url,
+    inviteCode: serverRow.invite_code,
+    profileId: serverRow.profile_id,
+    createdAt: serverRow.created_at,
+    updatedAt: serverRow.updated_at
+  };
+
+  // Get channels
+  const channelsResult = await db.execute(
+    'SELECT * FROM channels_by_server WHERE server_id = ?',
+    [serverId],
+    { prepare: true }
+  );
+
+  const channels = channelsResult.rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    type: row.type as ChannelType,
+    serverId: row.server_id,
+    profileId: row.profile_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+
+  // Get members
+  const membersResult = await db.execute(
+    'SELECT * FROM members_by_server WHERE server_id = ?',
+    [serverId],
+    { prepare: true }
+  );
+
+  const members = membersResult.rows.map(row => ({
+    id: row.id,
+    role: row.role as MemberRole,
+    profileId: row.profile_id,
+    serverId: row.server_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    profile: {
+      id: row.profile_id,
+      userId: '',
+      name: row.profile_name,
+      imageUrl: row.profile_image_url,
+      email: row.profile_email,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  }));
+
+  const textChannels = channels.filter(
     (channel) => channel.type === ChannelType.TEXT
   );
-  const audioChannels = server?.channels.filter(
+  const audioChannels = channels.filter(
     (channel) => channel.type === ChannelType.AUDIO
   );
-  const videoChannels = server?.channels.filter(
+  const videoChannels = channels.filter(
     (channel) => channel.type === ChannelType.VIDEO
   );
-  const members = server?.members.filter(
+  const filteredMembers = members.filter(
     (member) => profile.id !== member.profileId
   );
 
-  const role = server?.members.find(
+  const role = members.find(
     (member) => member.profileId === profile.id
   )?.role;
 
@@ -115,7 +155,7 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
               {
                 label: "Members",
                 type: "member",
-                data: members?.map((member) => ({
+                data: filteredMembers?.map((member) => ({
                   icon: roleIconMap[member.role],
                   name: member.profile.name,
                   id: member.id,
@@ -191,7 +231,7 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
             </div>
           </div>
         )}
-        {!!members?.length && (
+        {!!filteredMembers?.length && (
           <div className="mb-2">
             <ServerSection
               sectionType="members"
@@ -199,7 +239,7 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
               label="Members"
               server={server}
             />
-            {members.map((member) => {
+            {filteredMembers.map((member) => {
               return (
                 <ServerMember key={member.id} server={server} member={member} />
               );

@@ -16,19 +16,18 @@ const ServerLayout = async ({
   if (!profile) {
     return redirectToSignIn();
   }
-  const server = await db.server.findUnique({
-    where: {
-      id: params.serverId,
-      members: {
-        some: {
-          profileId: profile.id,
-        },
-      },
-    },
-  });
-  if (!server) {
+  
+  // Verify user is member of this server
+  const memberResult = await db.execute(
+    'SELECT * FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
+    [profile.id, params.serverId],
+    { prepare: true }
+  );
+  
+  if (memberResult.rows.length === 0) {
     return redirect("/");
   }
+  
   return (
     <div className="h-full">
       <div className="hidden md:flex h-full w-60 z-20 flex-col fixed inset-y-0">

@@ -1,5 +1,5 @@
 "use client";
-import { Member, Profile } from "@prisma/client";
+import { Member, Profile } from "@/types/cassandra";
 import React, { Fragment, useRef, ElementRef } from "react";
 import ChatWelcome from "./ChatWelcome";
 import useChatQuery from "@/hooks/useChatQuery";

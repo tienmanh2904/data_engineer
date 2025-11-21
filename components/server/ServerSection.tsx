@@ -1,6 +1,6 @@
 "use client";
 import { ServerWithMemberAndProfile } from "@/types/ServerType";
-import { ChannelType, MemberRole } from "@prisma/client";
+import { ChannelType, MemberRole } from "@/types/cassandra";
 import React from "react";
 import ToolTipAction from "../ToolTipAction";
 import { Plus, Settings } from "lucide-react";

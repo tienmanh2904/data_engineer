@@ -1,6 +1,6 @@
 "use client";
 import { ServerWithMemberAndProfile } from "@/types/ServerType";
-import { MemberRole } from "@prisma/client";
+import { MemberRole } from "@/types/cassandra";
 import React from "react";
 import {
   DropdownMenu,

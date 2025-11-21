@@ -1,4 +1,4 @@
-import { Channel, ChannelType, Server } from "@prisma/client";
+import { Channel, ChannelType, Server } from "@/types/cassandra";
 import { create } from "zustand";
 
 export type ModalType =

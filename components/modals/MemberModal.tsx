@@ -36,7 +36,7 @@ import axios from "axios";
 import { ServerWithMemberAndProfile } from "@/types/ServerType";
 import { ScrollArea } from "../ui/scroll-area";
 import UserAvatar from "../UserAvatar";
-import { MemberRole } from "@prisma/client";
+import { MemberRole } from "@/types/cassandra";
 import qs from "query-string";
 import { useRouter } from "next/navigation";
 import Image from "next/image";

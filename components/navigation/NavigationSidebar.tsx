@@ -14,15 +14,20 @@ const NavigationSidebar = async () => {
   if (!profile) {
     return redirect("/");
   }
-  const servers = await db.server.findMany({
-    where: {
-      members: {
-        some: {
-          profileId: profile.id,
-        },
-      },
-    },
-  });
+  
+  // Get all servers for this profile
+  const serversResult = await db.execute(
+    'SELECT * FROM servers_by_profile WHERE profile_id = ?',
+    [profile.id],
+    { prepare: true }
+  );
+  
+  const servers = serversResult.rows.map(row => ({
+    id: row.server_id,
+    name: row.server_name,
+    imageUrl: row.server_image_url
+  }));
+  
   return (
     <div className="space-y-4 flex flex-col items-center h-full text-primary w-full bg-[#e3e5e8] dark:bg-[#1e1f22] py-3">
       <NavigationAction />

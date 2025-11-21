@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import ChatHeader from "@/components/chat/ChatHeader";
 import ChatInput from "@/components/chat/ChatInput";
 import ChatMessages from "@/components/chat/ChatMessages";
-import { ChannelType } from "@prisma/client";
+import { ChannelType } from "@/types/cassandra";
 import MediaRoom from "@/components/MediaRoom";
 
 interface PageProps {
@@ -19,20 +19,50 @@ interface PageProps {
 const Page = async ({ params }: PageProps) => {
   const profile = await currentProfile();
   if (!profile) return redirectToSignIn();
-  const channel = await db.channel.findUnique({
-    where: {
-      id: params.channelId,
-    },
-  });
-  const member = await db.member.findFirst({
-    where: {
-      serverId: params.serverId,
-      profileId: profile.id,
-    },
-  });
-  if (!channel || !member) {
-    redirect("/");
+  
+  // Get channel
+  const channelResult = await db.execute(
+    'SELECT * FROM channels_by_id WHERE id = ?',
+    [params.channelId],
+    { prepare: true }
+  );
+  
+  if (channelResult.rows.length === 0) {
+    return redirect("/");
   }
+  
+  const channelRow = channelResult.rows[0];
+  const channel = {
+    id: channelRow.id,
+    name: channelRow.name,
+    type: channelRow.type as ChannelType,
+    serverId: channelRow.server_id,
+    profileId: channelRow.profile_id,
+    createdAt: channelRow.created_at,
+    updatedAt: channelRow.updated_at
+  };
+  
+  // Get member
+  const memberResult = await db.execute(
+    'SELECT * FROM members_by_profile_and_server WHERE server_id = ? AND profile_id = ?',
+    [params.serverId, profile.id],
+    { prepare: true }
+  );
+  
+  if (memberResult.rows.length === 0) {
+    return redirect("/");
+  }
+  
+  const memberRow = memberResult.rows[0];
+  const member = {
+    id: memberRow.id,
+    role: memberRow.role,
+    profileId: memberRow.profile_id,
+    serverId: memberRow.server_id,
+    createdAt: memberRow.created_at,
+    updatedAt: memberRow.updated_at
+  };
+  
   return (
     <div className="bg-white dark:bg-[#313338] flex flex-col h-full">
       <ChatHeader

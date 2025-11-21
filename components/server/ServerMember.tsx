@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
-import { Member, MemberRole, Profile, Server } from "@prisma/client";
+import { Member, MemberRole, Profile, Server } from "@/types/cassandra";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import React from "react";

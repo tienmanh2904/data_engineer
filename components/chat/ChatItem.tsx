@@ -1,5 +1,5 @@
 "use client";
-import { Member, MemberRole, Profile } from "@prisma/client";
+import { Member, MemberRole, Profile } from "@/types/cassandra";
 import React, { useEffect, useState } from "react";
 import UserAvatar from "../UserAvatar";
 import ToolTipAction from "../ToolTipAction";
