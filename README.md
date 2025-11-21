@@ -53,24 +53,16 @@ docker exec -it cassandra-1 cqlsh -f /schema.cql
 ### Setup Environment Variables (.env)
 ```bash
 # Cassandra Database
-CASSANDRA_CONTACT_POINTS=localhost
-CASSANDRA_LOCAL_DATACENTER=datacenter1
-CASSANDRA_KEYSPACE=discord_app
+UPLOADTHING_SECRET=
+UPLOADTHING_APP_ID=
 
-# JWT Authentication (IMPORTANT: Change in production!)
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+# For Initialization Of Clerk Authentication
 
-# Upload Images (UploadThing)
-UPLOADTHING_SECRET=your-uploadthing-secret
-UPLOADTHING_APP_ID=your-uploadthing-app-id
-
-# Live Video Streaming (LiveKit)
-LIVEKIT_API_KEY=your-livekit-api-key
-LIVEKIT_API_SECRET=your-livekit-api-secret
-NEXT_PUBLIC_LIVEKIT_URL=your-livekit-url
-
-# App Configuration
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+JWT_SECRET=your-super-secret-key-here
+# For Live Video Streaming
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+NEXT_PUBLIC_LIVEKIT_URL=
 ```
 
 ### Start the Development Server
