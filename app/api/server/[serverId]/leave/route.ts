@@ -17,7 +17,7 @@ export async function PATCH(
       return new NextResponse("Server ID missing", { status: 400 });
     }
 
-    // Get server to verify it's not owned by the leaving user
+    // 1. Get server to verify ownership
     const serverResult = await db.execute(
       'SELECT * FROM servers_by_id WHERE id = ?',
       [serverId],
@@ -31,11 +31,12 @@ export async function PATCH(
     const server = serverResult.rows[0];
 
     // Cannot leave if you're the owner
-    if (server.profile_id === profile.id) {
+    if (server.profile_id.toString() === profile.id) {
       return new NextResponse("Cannot leave server you own", { status: 403 });
     }
 
-    // Get member info
+    // 2. Get member info
+    // We need 'role' (for members_by_server PK) and 'created_at' (for servers_by_profile PK)
     const memberResult = await db.execute(
       'SELECT * FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
       [profile.id, serverId],
@@ -47,28 +48,34 @@ export async function PATCH(
     }
 
     const member = memberResult.rows[0];
+    
+    // IMPORTANT: Capture these for the composite keys
+    const memberRole = member.role;
+    const joinedAt = member.created_at; // Corresponds to 'joined_at' in servers_by_profile
 
-    // Delete member from all tables
+    // 3. Delete member from all tables
     const queries = [
-      // Delete from members_by_id
+      // Delete from members_by_id (PK: id)
       {
         query: 'DELETE FROM members_by_id WHERE id = ?',
         params: [member.id]
       },
-      // Delete from members_by_server
+      // Delete from members_by_server (PK: server_id, role, id)
+      // FIX: Added 'role' to WHERE clause
       {
-        query: 'DELETE FROM members_by_server WHERE server_id = ? AND id = ?',
-        params: [serverId, member.id]
+        query: 'DELETE FROM members_by_server WHERE server_id = ? AND role = ? AND id = ?',
+        params: [serverId, memberRole, member.id]
       },
-      // Delete from members_by_profile_and_server
+      // Delete from members_by_profile_and_server (PK: profile_id, server_id)
       {
         query: 'DELETE FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
         params: [profile.id, serverId]
       },
-      // Delete from servers_by_profile
+      // Delete from servers_by_profile (PK: profile_id, joined_at, server_id)
+      // FIX: Added 'joined_at' to WHERE clause
       {
-        query: 'DELETE FROM servers_by_profile WHERE profile_id = ? AND server_id = ?',
-        params: [profile.id, serverId]
+        query: 'DELETE FROM servers_by_profile WHERE profile_id = ? AND joined_at = ? AND server_id = ?',
+        params: [profile.id, joinedAt, serverId]
       }
     ];
 

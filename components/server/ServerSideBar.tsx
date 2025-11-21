@@ -9,7 +9,6 @@ import ServerSearch from "./ServerSearch";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video } from "lucide-react";
 import { Separator } from "../ui/separator";
 import ServerSection from "./ServerSection";
-import { channel } from "diagnostics_channel";
 import ServerChannel from "./ServerChannel";
 import ServerMember from "./ServerMember";
 
@@ -36,8 +35,8 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
   if (!profile) {
     return redirect("/");
   }
-  
-  // Get server
+
+  // 1. Get server basic info
   const serverResult = await db.execute(
     'SELECT * FROM servers_by_id WHERE id = ?',
     [serverId],
@@ -49,17 +48,8 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
   }
 
   const serverRow = serverResult.rows[0];
-  const server = {
-    id: serverRow.id,
-    name: serverRow.name,
-    imageUrl: serverRow.image_url,
-    inviteCode: serverRow.invite_code,
-    profileId: serverRow.profile_id,
-    createdAt: serverRow.created_at,
-    updatedAt: serverRow.updated_at
-  };
 
-  // Get channels
+  // 2. Get channels
   const channelsResult = await db.execute(
     'SELECT * FROM channels_by_server WHERE server_id = ?',
     [serverId],
@@ -67,16 +57,16 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
   );
 
   const channels = channelsResult.rows.map(row => ({
-    id: row.id,
+    id: row.id.toString(),
     name: row.name,
     type: row.type as ChannelType,
-    serverId: row.server_id,
-    profileId: row.profile_id,
+    serverId: row.server_id.toString(),
+    profileId: row.profile_id.toString(),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }));
 
-  // Get members
+  // 3. Get members
   const membersResult = await db.execute(
     'SELECT * FROM members_by_server WHERE server_id = ?',
     [serverId],
@@ -84,23 +74,38 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
   );
 
   const members = membersResult.rows.map(row => ({
-    id: row.id,
+    id: row.id.toString(),
     role: row.role as MemberRole,
-    profileId: row.profile_id,
-    serverId: row.server_id,
+    profileId: row.profile_id.toString(),
+    serverId: row.server_id.toString(),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     profile: {
-      id: row.profile_id,
-      userId: '',
+      id: row.profile_id.toString(),
+      userId: '', // Not available in denormalized data
       name: row.profile_name,
       imageUrl: row.profile_image_url,
       email: row.profile_email,
-      createdAt: row.created_at,
+      createdAt: row.created_at, // Approximate
       updatedAt: row.updated_at
     }
   }));
 
+  // 4. Construct the FULL server object with relations
+  // This satisfies ServerWithMemberAndProfile and ServerWithMembersAndChannels
+  const server = {
+    id: serverRow.id.toString(),
+    name: serverRow.name,
+    imageUrl: serverRow.image_url,
+    inviteCode: serverRow.invite_code,
+    profileId: serverRow.profile_id.toString(),
+    createdAt: serverRow.created_at,
+    updatedAt: serverRow.updated_at,
+    channels: channels, // <--- Attached here
+    members: members    // <--- Attached here (Fixes the error)
+  };
+
+  // Filter channels for UI
   const textChannels = channels.filter(
     (channel) => channel.type === ChannelType.TEXT
   );
@@ -110,10 +115,13 @@ const ServerSideBar: React.FC<ServerSideBarProps> = async ({ serverId }) => {
   const videoChannels = channels.filter(
     (channel) => channel.type === ChannelType.VIDEO
   );
+  
+  // Filter members (exclude self)
   const filteredMembers = members.filter(
     (member) => profile.id !== member.profileId
   );
 
+  // Find current user role
   const role = members.find(
     (member) => member.profileId === profile.id
   )?.role;

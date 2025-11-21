@@ -10,20 +10,18 @@ export async function DELETE(
   try {
     const profile = await currentProfile();
     const { searchParams } = new URL(req.url);
-    if (!profile) return new NextResponse("Unauthorized", { status: 401 });
     const { channelId } = params;
-    if (!channelId) {
-      return new NextResponse("Channel ID Required", { status: 400 });
-    }
-    const serverId = searchParams.get("serverId");
-    if (!serverId) {
-      return new NextResponse("Server ID Required", { status: 400 });
-    }
 
-    // Get channel to verify it's not "general"
+    if (!profile) return new NextResponse("Unauthorized", { status: 401 });
+    if (!channelId) return new NextResponse("Channel ID Required", { status: 400 });
+    
+    const serverId = searchParams.get("serverId");
+    if (!serverId) return new NextResponse("Server ID Required", { status: 400 });
+
+    // 1. Get channel by ID only (to avoid ALLOW FILTERING error)
     const channelResult = await db.execute(
-      'SELECT * FROM channels_by_id WHERE id = ? AND server_id = ?',
-      [channelId, serverId],
+      'SELECT * FROM channels_by_id WHERE id = ?',
+      [channelId],
       { prepare: true }
     );
 
@@ -32,11 +30,17 @@ export async function DELETE(
     }
 
     const channel = channelResult.rows[0];
+
+    // 2. Manually verify server_id matches
+    if (channel.server_id.toString() !== serverId) {
+        return new NextResponse("Channel not found", { status: 404 });
+    }
+
     if (channel.name === "general") {
       return new NextResponse("Cannot delete general channel", { status: 400 });
     }
 
-    // Verify user is admin or moderator
+    // 3. Verify user is admin or moderator
     const memberResult = await db.execute(
       'SELECT * FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
       [profile.id, serverId],
@@ -52,39 +56,23 @@ export async function DELETE(
       return new NextResponse("Insufficient permissions", { status: 403 });
     }
 
-    // Delete channel from multiple tables
+    // 4. Capture created_at for the composite key in channels_by_server
+    const channelCreatedAt = channel.created_at;
+
+    // 5. Delete channel from multiple tables
     const queries = [
       {
         query: 'DELETE FROM channels_by_id WHERE id = ?',
         params: [channelId]
       },
       {
-        query: 'DELETE FROM channels_by_server WHERE server_id = ? AND id = ?',
-        params: [serverId, channelId]
+        // Fix: Added created_at to WHERE clause (Required for Primary Key)
+        query: 'DELETE FROM channels_by_server WHERE server_id = ? AND created_at = ? AND id = ?',
+        params: [serverId, channelCreatedAt, channelId]
       }
     ];
 
     await db.batch(queries, { prepare: true });
-
-    // Get server info to return
-    const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ?',
-      [serverId],
-      { prepare: true }
-    );
-
-    if (serverResult.rows.length > 0) {
-      const server = serverResult.rows[0];
-      return NextResponse.json({
-        id: server.id,
-        name: server.name,
-        imageUrl: server.image_url,
-        inviteCode: server.invite_code,
-        profileId: server.profile_id,
-        createdAt: server.created_at,
-        updatedAt: server.updated_at
-      });
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -93,6 +81,7 @@ export async function DELETE(
   }
 }
 
+// Note: Usually Edit is a PATCH request, but keeping POST as per your file
 export async function POST(
   req: Request,
   { params }: { params: { channelId: string } }
@@ -103,21 +92,19 @@ export async function POST(
     const { searchParams } = new URL(req.url);
     const serverId = searchParams.get("serverId");
     const { name, type } = await req.json();
+
     if (!profile) return new NextResponse("Unauthorized", { status: 401 });
-    if (!channelId) {
-      return new NextResponse("Channel ID Required", { status: 400 });
-    }
-    if (!serverId) {
-      return new NextResponse("Server ID Required", { status: 400 });
-    }
+    if (!channelId) return new NextResponse("Channel ID Required", { status: 400 });
+    if (!serverId) return new NextResponse("Server ID Required", { status: 400 });
+    
     if (name === "general") {
       return new NextResponse("Cannot edit general channel", { status: 400 });
     }
 
-    // Get channel to verify it's not "general"
+    // 1. Get channel by ID only
     const channelResult = await db.execute(
-      'SELECT * FROM channels_by_id WHERE id = ? AND server_id = ?',
-      [channelId, serverId],
+      'SELECT * FROM channels_by_id WHERE id = ?',
+      [channelId],
       { prepare: true }
     );
 
@@ -126,11 +113,17 @@ export async function POST(
     }
 
     const channel = channelResult.rows[0];
+
+    // 2. Verify server_id matches
+    if (channel.server_id.toString() !== serverId) {
+        return new NextResponse("Channel not found", { status: 404 });
+    }
+
     if (channel.name === "general") {
       return new NextResponse("Cannot edit general channel", { status: 400 });
     }
-
-    // Verify user is admin or moderator
+    
+    // 3. Verify permissions
     const memberResult = await db.execute(
       'SELECT * FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
       [profile.id, serverId],
@@ -147,40 +140,23 @@ export async function POST(
     }
 
     const now = new Date();
+    // 4. Capture created_at for the composite key
+    const channelCreatedAt = channel.created_at;
 
-    // Update channel in multiple tables
+    // 5. Update channel in multiple tables
     const queries = [
       {
         query: 'UPDATE channels_by_id SET name = ?, type = ?, updated_at = ? WHERE id = ?',
         params: [name, type, now, channelId]
       },
       {
-        query: 'UPDATE channels_by_server SET name = ?, type = ?, updated_at = ? WHERE server_id = ? AND id = ?',
-        params: [name, type, now, serverId, channelId]
+        // Fix: Added created_at to WHERE clause (Required for Primary Key)
+        query: 'UPDATE channels_by_server SET name = ?, type = ?, updated_at = ? WHERE server_id = ? AND created_at = ? AND id = ?',
+        params: [name, type, now, serverId, channelCreatedAt, channelId]
       }
     ];
 
     await db.batch(queries, { prepare: true });
-
-    // Get server info to return
-    const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ?',
-      [serverId],
-      { prepare: true }
-    );
-
-    if (serverResult.rows.length > 0) {
-      const server = serverResult.rows[0];
-      return NextResponse.json({
-        id: server.id,
-        name: server.name,
-        imageUrl: server.image_url,
-        inviteCode: server.invite_code,
-        profileId: server.profile_id,
-        createdAt: server.created_at,
-        updatedAt: server.updated_at
-      });
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

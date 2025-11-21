@@ -15,20 +15,11 @@ export default async function handler(
     const profile = await currentProfilePages(req);
     const { content, fileUrl } = req.body;
     const { serverId, channelId } = req.query;
-    if (!profile) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    if (!serverId) {
-      return res.status(400).json({ message: "Server id is required" });
-    }
-    if (!channelId) {
-      return res.status(400).json({ message: "Channel id is required" });
-    }
-    if (!content) {
-      return res
-        .status(400)
-        .json({ message: "Content or file url is required" });
-    }
+    
+    if (!profile) return res.status(401).json({ message: "Unauthorized" });
+    if (!serverId) return res.status(400).json({ message: "Server id is required" });
+    if (!channelId) return res.status(400).json({ message: "Channel id is required" });
+    if (!content) return res.status(400).json({ message: "Content is required" });
 
     // Verify server membership
     const memberResult = await db.execute(
@@ -45,8 +36,8 @@ export default async function handler(
 
     // Verify channel exists
     const channelResult = await db.execute(
-      'SELECT * FROM channels_by_id WHERE id = ? AND server_id = ?',
-      [channelId as string, serverId as string],
+      'SELECT * FROM channels_by_id WHERE id = ?',
+      [channelId as string],
       { prepare: true }
     );
 
@@ -54,15 +45,32 @@ export default async function handler(
       return res.status(404).json({ message: "Channel not found" });
     }
 
+    const channel = channelResult.rows[0];
+
+    if (channel.server_id.toString() !== (serverId as string)) {
+       return res.status(404).json({ message: "Channel not found in this server" });
+    }
+
     const messageId = uuidv4();
     const now = new Date();
 
-    // Insert message with denormalized member and profile data
-    await db.execute(
-      'INSERT INTO messages_by_channel (channel_id, created_at, id, content, file_url, member_id, member_profile_id, member_profile_name, member_profile_image_url, member_role, deleted, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [channelId, now, messageId, content, fileUrl || null, member.id, profile.id, profile.name, profile.imageUrl, member.role, false, now],
-      { prepare: true }
-    );
+    // FIX: Insert into BOTH tables (Lookup Table + Main Table)
+    const queries = [
+      {
+        // 1. Lookup Table (Needed for Deleting/Editing later)
+        query: `INSERT INTO messages_by_id (id, content, file_url, member_id, channel_id, deleted, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [messageId, content, fileUrl || null, member.id, channelId, false, now, now]
+      },
+      {
+        // 2. Main Channel Feed
+        query: `INSERT INTO messages_by_channel (channel_id, created_at, id, content, file_url, member_id, member_profile_id, member_profile_name, member_profile_image_url, member_role, deleted, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [channelId, now, messageId, content, fileUrl || null, member.id, profile.id, profile.name, profile.imageUrl, member.role, false, now]
+      }
+    ];
+
+    await db.batch(queries, { prepare: true });
 
     const message = {
       id: messageId,

@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect, useState } from "react";
+
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,9 +20,6 @@ import {
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import useModal from "@/hooks/useModal";
-import { Label } from "../ui/label";
-import { Input } from "../ui/input";
-import { Button } from "../ui/button";
 import {
   Check,
   Gavel,
@@ -36,21 +34,23 @@ import axios from "axios";
 import { ServerWithMemberAndProfile } from "@/types/ServerType";
 import { ScrollArea } from "../ui/scroll-area";
 import UserAvatar from "../UserAvatar";
-import { MemberRole } from "@/types/cassandra";
+import { MemberRole } from "@/types/cassandra"; // Importing the Enum
 import qs from "query-string";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 
+// Use the Enum for the map keys
 const roleIconMap = {
-  GUEST: null,
-  MODERATOR: <ShieldCheck className="w-4 h-4 ml-2" />,
-  ADMIN: <ShieldAlert className="w-4 h-4 ml-2" />,
+  [MemberRole.GUEST]: null,
+  [MemberRole.MODERATOR]: <ShieldCheck className="w-4 h-4 ml-2" />,
+  [MemberRole.ADMIN]: <ShieldAlert className="w-4 h-4 ml-2" />,
 };
 
 const MemberModal = () => {
   const router = useRouter();
   const { onOpen, isOpen, onClose, type, data } = useModal();
   const isModalOpen = isOpen && type === "members";
+  
+  // Safe cast for the data
   const { server } = data as { server: ServerWithMemberAndProfile };
   const [loadingId, setLoadingId] = useState<string>("");
 
@@ -97,6 +97,7 @@ const MemberModal = () => {
       <DialogContent className="bg-white dark:bg-[#1e1f22] text-black dark:text-white overflow-hidden">
         <DialogHeader className="pt-4 px-2">
           <DialogTitle className="text-2xl text-left font-bold">
+            {/* Use standard img tag or Next Image if configured in next.config.js */}
             <img
               src="/logo.png"
               alt="logo"
@@ -141,23 +142,23 @@ const MemberModal = () => {
                               <DropdownMenuSubContent>
                                 <DropdownMenuItem
                                   onClick={() =>
-                                    onRoleChange(member.id, "GUEST")
+                                    onRoleChange(member.id, MemberRole.GUEST)
                                   }
                                 >
                                   <Shield className="h-4 w-4 mr-2" />
                                   Guest
-                                  {member.role === "GUEST" && (
+                                  {member.role === MemberRole.GUEST && (
                                     <Check className="h-4 w-4 text-green-600 ml-2" />
                                   )}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() =>
-                                    onRoleChange(member.id, "MODERATOR")
+                                    onRoleChange(member.id, MemberRole.MODERATOR)
                                   }
                                 >
                                   <ShieldCheck className="h-4 w-4 mr-2" />
                                   Moderator
-                                  {member.role === "MODERATOR" && (
+                                  {member.role === MemberRole.MODERATOR && (
                                     <Check className="h-4 w-4 text-green-600 ml-2" />
                                   )}
                                 </DropdownMenuItem>

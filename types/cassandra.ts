@@ -1,5 +1,8 @@
-// TypeScript type definitions for Cassandra models
-// Replace @prisma/client imports with these types
+import { types } from 'cassandra-driver';
+
+// ============================================================
+// ENUMS
+// ============================================================
 
 export enum MemberRole {
   ADMIN = 'ADMIN',
@@ -13,7 +16,9 @@ export enum ChannelType {
   VIDEO = 'VIDEO'
 }
 
-// Base types matching Cassandra tables
+// ============================================================
+// APP INTERFACES (Frontend usage)
+// ============================================================
 
 export interface Profile {
   id: string;
@@ -84,8 +89,9 @@ export interface DirectMessage {
   updatedAt: Date;
 }
 
-// Extended types with relations (for frontend use)
-// These types include denormalized data that comes from Cassandra queries
+// ============================================================
+// EXTENDED INTERFACES
+// ============================================================
 
 export interface MemberWithProfile extends Member {
   profile: Profile;
@@ -109,158 +115,106 @@ export interface ConversationWithMembers extends Conversation {
   memberTwo: MemberWithProfile;
 }
 
-// Cassandra query result types (with denormalized fields)
+// ============================================================
+// HELPER FUNCTIONS (Mappers)
+// ============================================================
 
-export interface MessageFromChannel {
-  channel_id: string;
-  created_at: Date;
-  id: string;
-  content: string;
-  file_url?: string;
-  member_id: string;
-  member_profile_id: string;
-  member_profile_name: string;
-  member_profile_image_url: string;
-  member_role: MemberRole;
-  deleted: boolean;
-  updated_at: Date;
-}
+/**
+ * Helper to safely convert Cassandra UUID/TimeUUID objects to string
+ */
+const toString = (val: any): string => {
+  if (!val) return "";
+  return val.toString();
+};
 
-export interface DirectMessageFromConversation {
-  conversation_id: string;
-  created_at: Date;
-  id: string;
-  content: string;
-  file_url?: string;
-  member_id: string;
-  member_profile_id: string;
-  member_profile_name: string;
-  member_profile_image_url: string;
-  deleted: boolean;
-  updated_at: Date;
-}
-
-export interface MemberFromServer {
-  server_id: string;
-  role: MemberRole;
-  id: string;
-  profile_id: string;
-  profile_name: string;
-  profile_image_url: string;
-  profile_email: string;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface ChannelFromServer {
-  server_id: string;
-  created_at: Date;
-  id: string;
-  name: string;
-  type: ChannelType;
-  profile_id: string;
-  updated_at: Date;
-}
-
-export interface ServerFromProfile {
-  profile_id: string;
-  joined_at: Date;
-  server_id: string;
-  member_role: MemberRole;
-  server_image_url: string;
-  server_name: string;
-}
-
-// Helper functions to convert Cassandra results to app types
-
-export function messageFromChannelToMessage(row: MessageFromChannel): MessageWithMember {
+export function messageFromChannelToMessage(row: types.Row): MessageWithMember {
   return {
-    id: row.id,
-    content: row.content,
-    fileUrl: row.file_url,
-    memberId: row.member_id,
-    channelId: row.channel_id,
-    deleted: row.deleted,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    id: toString(row.get('id')),
+    content: row.get('content'),
+    fileUrl: row.get('file_url'),
+    memberId: toString(row.get('member_id')),
+    channelId: toString(row.get('channel_id')),
+    deleted: row.get('deleted') || false,
+    createdAt: row.get('created_at'),
+    updatedAt: row.get('updated_at'),
     member: {
-      id: row.member_id,
-      role: row.member_role,
-      profileId: row.member_profile_id,
-      serverId: row.channel_id, // Note: this is approximate, might need server_id in query
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: toString(row.get('member_id')),
+      role: row.get('member_role') as MemberRole,
+      profileId: toString(row.get('member_profile_id')),
+      serverId: toString(row.get('channel_id')), // Approximate
+      createdAt: row.get('created_at'), // Approximate (using message time)
+      updatedAt: row.get('updated_at'),
       profile: {
-        id: row.member_profile_id,
-        userId: '', // Not available in denormalized data
-        name: row.member_profile_name,
-        imageUrl: row.member_profile_image_url,
-        email: '', // Not available in denormalized data
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+        id: toString(row.get('member_profile_id')),
+        userId: '', 
+        name: row.get('member_profile_name'),
+        imageUrl: row.get('member_profile_image_url'),
+        email: '',
+        createdAt: row.get('created_at'), // Approximate
+        updatedAt: row.get('updated_at'),
       }
     }
   };
 }
 
-export function directMessageFromConversationToMessage(row: DirectMessageFromConversation): DirectMessageWithMember {
+export function directMessageFromConversationToMessage(row: types.Row): DirectMessageWithMember {
   return {
-    id: row.id,
-    content: row.content,
-    fileUrl: row.file_url,
-    memberId: row.member_id,
-    conversationId: row.conversation_id,
-    deleted: row.deleted,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    id: toString(row.get('id')),
+    content: row.get('content'),
+    fileUrl: row.get('file_url'),
+    memberId: toString(row.get('member_id')),
+    conversationId: toString(row.get('conversation_id')),
+    deleted: row.get('deleted') || false,
+    createdAt: row.get('created_at'),
+    updatedAt: row.get('updated_at'),
     member: {
-      id: row.member_id,
-      role: MemberRole.GUEST, // Not available in direct messages
-      profileId: row.member_profile_id,
-      serverId: '', // Not applicable for direct messages
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: toString(row.get('member_id')),
+      role: MemberRole.GUEST,
+      profileId: toString(row.get('member_profile_id')),
+      serverId: '',
+      createdAt: row.get('created_at'),
+      updatedAt: row.get('updated_at'),
       profile: {
-        id: row.member_profile_id,
-        userId: '', // Not available in denormalized data
-        name: row.member_profile_name,
-        imageUrl: row.member_profile_image_url,
-        email: '', // Not available in denormalized data
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+        id: toString(row.get('member_profile_id')),
+        userId: '',
+        name: row.get('member_profile_name'),
+        imageUrl: row.get('member_profile_image_url'),
+        email: '',
+        createdAt: row.get('created_at'),
+        updatedAt: row.get('updated_at'),
       }
     }
   };
 }
 
-export function memberFromServerToMember(row: MemberFromServer): MemberWithProfile {
+export function memberFromServerToMember(row: types.Row): MemberWithProfile {
   return {
-    id: row.id,
-    role: row.role,
-    profileId: row.profile_id,
-    serverId: row.server_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    id: toString(row.get('id')),
+    role: row.get('role') as MemberRole,
+    profileId: toString(row.get('profile_id')),
+    serverId: toString(row.get('server_id')),
+    createdAt: row.get('created_at'),
+    updatedAt: row.get('updated_at'),
     profile: {
-      id: row.profile_id,
-      userId: '', // Not available in denormalized data
-      name: row.profile_name,
-      imageUrl: row.profile_image_url,
-      email: row.profile_email,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: toString(row.get('profile_id')),
+      userId: '',
+      name: row.get('profile_name'),
+      imageUrl: row.get('profile_image_url'),
+      email: row.get('profile_email'),
+      createdAt: row.get('created_at'),
+      updatedAt: row.get('updated_at'),
     }
   };
 }
 
-export function channelFromServerToChannel(row: ChannelFromServer): Channel {
+export function channelFromServerToChannel(row: types.Row): Channel {
   return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    serverId: row.server_id,
-    profileId: row.profile_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    id: toString(row.get('id')),
+    name: row.get('name'),
+    type: row.get('type') as ChannelType,
+    serverId: toString(row.get('server_id')),
+    profileId: toString(row.get('profile_id')),
+    createdAt: row.get('created_at'),
+    updatedAt: row.get('updated_at'),
   };
 }

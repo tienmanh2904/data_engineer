@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { MessageWithMember, messageFromChannelToMessage } from "@/types/cassandra";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
 const MESSAGES_PER_PAGE = 10;
 
 export async function GET(req: Request) {
