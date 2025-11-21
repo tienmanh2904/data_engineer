@@ -41,7 +41,7 @@ docker-compose up -d
 
 # Wait 5 minutes
 docker exec -it cassandra-1 nodetool status
-# if the output show 
+# Correct output will show 3 nodes with UN
 UN  172.18.0.2  75.5 KiB   16      100.0%            xxxx-xxxx-xxxx-xxxx                   rack1
 UN  172.18.0.3  75.5 KiB   16      100.0%            yyyy-yyyy-yyyy-yyyy                   rack1
 UN  172.18.0.4  75.5 KiB   16      100.0%
