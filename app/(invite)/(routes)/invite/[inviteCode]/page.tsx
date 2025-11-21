@@ -1,7 +1,6 @@
 import InviteBox from "@/components/InviteBox";
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
-import { RedirectToSignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import React from "react";
 import { types } from "cassandra-driver";
@@ -16,7 +15,7 @@ const Page: React.FC<InvitePageProps> = async ({ params }) => {
   const profile = await currentProfile();
 
   if (!profile) {
-    return <RedirectToSignIn />;
+    return redirect("/sign-in");
   }
 
   if (!params.inviteCode) {

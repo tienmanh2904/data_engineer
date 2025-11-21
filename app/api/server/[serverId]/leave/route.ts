@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
 import { MemberRole } from "@/types/cassandra";
-
+export const dynamic = "force-dynamic";
 export async function PATCH(
   req: Request,
   { params }: { params: { serverId: string } }

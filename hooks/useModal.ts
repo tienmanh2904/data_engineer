@@ -1,4 +1,5 @@
 import { Channel, ChannelType, Server } from "@/types/cassandra";
+import { Friend, FriendRequest } from "@/types/friends";
 import { create } from "zustand";
 
 export type ModalType =
@@ -12,7 +13,10 @@ export type ModalType =
   | "deleteChannel"
   | "editChannel"
   | "messageFile"
-  | "deleteMessage";
+  | "deleteMessage"
+  | "addFriend"
+  | "removeFriend"
+  | "friendRequests";
 
 interface ModalData {
   server?: Server;
@@ -20,6 +24,8 @@ interface ModalData {
   channel?: Channel;
   apiUrl?: string;
   query?: Record<string, any>;
+  friend?: Friend;
+  friendRequest?: FriendRequest;
 }
 
 interface ModalStore {

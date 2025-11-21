@@ -6,8 +6,8 @@ import {
   useStartAudio,
 } from "@livekit/components-react";
 import { Channel } from "@/types/cassandra";
-import { useUser } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
+import axios from "axios";
 
 import '@livekit/components-styles';
 
@@ -18,17 +18,28 @@ interface MediaRoomProps {
 }
 
 const MediaRoom: React.FC<MediaRoomProps> = ({ chatId, video, audio }) => {
-  const { user } = useUser();
   const [token, setToken] = useState("");
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    if (!user?.firstName || !user?.lastName) return;
-    const name = `${user.firstName} ${user.lastName}`;
+    const fetchUser = async () => {
+      try {
+        const response = await axios.get("/api/auth/session");
+        setUserName(response.data.name || response.data.userId);
+      } catch (error) {
+        console.error("Failed to fetch user", error);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  useEffect(() => {
+    if (!userName) return;
 
     (async () => {
       try {
         const resp = await fetch(
-          `/api/livekit?room=${chatId}&username=${name}`
+          `/api/livekit?room=${chatId}&username=${userName}`
         );
         const data = await resp.json();
         setToken(data.token);
@@ -36,7 +47,7 @@ const MediaRoom: React.FC<MediaRoomProps> = ({ chatId, video, audio }) => {
         console.log(error);
       }
     })();
-  }, [user?.firstName, user?.lastName, chatId]);
+  }, [userName, chatId]);
 
   if (token === "") {
     return (

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Open_Sans } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
 import ThemeProvider from "@/components/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { ModalProvider } from "@/components/providers/ModalProvider";
@@ -26,9 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body className={cn(openSans.className, "bg-white dark:bg-[#313338]")}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={cn(openSans.className, "bg-white dark:bg-[#313338]")}>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
@@ -42,6 +40,5 @@ export default function RootLayout({
           </ThemeProvider>
         </body>
       </html>
-    </ClerkProvider>
   );
 }

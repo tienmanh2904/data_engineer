@@ -11,6 +11,8 @@ import DeleteChannel from "../modals/DeleteChannel";
 import EditChannel from "../modals/EditChannel";
 import MessageFile from "../modals/MessageFile";
 import DeleteMessage from "../modals/DeleteMessage";
+import AddFriendModal from "../modals/AddFriendModal";
+import RemoveFriendModal from "../modals/RemoveFriendModal";
 
 export const ModalProvider = () => {
   const [isMounted, setIsMounted] = useState(false);
@@ -34,6 +36,8 @@ export const ModalProvider = () => {
       <EditChannel />
       <MessageFile />
       <DeleteMessage />
+      <AddFriendModal />
+      <RemoveFriendModal />
     </>
   );
 };

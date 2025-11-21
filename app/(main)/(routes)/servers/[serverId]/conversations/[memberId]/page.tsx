@@ -5,7 +5,6 @@ import ChatMessages from "@/components/chat/ChatMessages";
 import { getOrCreateConversation } from "@/lib/conversation";
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
-import { redirectToSignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import React from "react";
 
@@ -22,7 +21,7 @@ interface PageProps {
 const Page = async ({ params, searchParams }: PageProps) => {
   const profile = await currentProfile();
   if (!profile) {
-    return redirectToSignIn();
+    return redirect("/sign-in");
   }
   
   // Get current member

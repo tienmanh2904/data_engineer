@@ -1,7 +1,6 @@
 import ServerSideBar from "@/components/server/ServerSideBar";
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
-import { redirectToSignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import React from "react";
 
@@ -14,7 +13,7 @@ const ServerLayout = async ({
 }) => {
   const profile = await currentProfile();
   if (!profile) {
-    return redirectToSignIn();
+    return redirect("/sign-in");
   }
   
   // Verify user is member of this server

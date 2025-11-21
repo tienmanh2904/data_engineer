@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import initialProfile from "@/lib/initialProfile";
 import { db } from "@/lib/db";
 import InitialModal from "@/components/modals/InitialModal";
-
+export const dynamic = "force-dynamic";
 const Page = async () => {
   const profile = await initialProfile();
   

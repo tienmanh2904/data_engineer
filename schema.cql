@@ -14,7 +14,56 @@ WITH REPLICATION = {
 USE discord_app;
 
 -- ====================================================================
--- PROFILES (User Management with Clerk Authentication)
+-- USERS (Custom Authentication with Username/Password)
+-- ====================================================================
+
+-- --------------------------------------------------------------------
+-- users_by_id: Main user storage
+-- Query: Get user by internal ID
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users_by_id (
+    id uuid PRIMARY KEY,
+    username text,
+    email text,
+    password_hash text,
+    name text,
+    image_url text,
+    created_at timestamp,
+    updated_at timestamp
+);
+
+-- --------------------------------------------------------------------
+-- users_by_username: Look up user by username
+-- Query: Get user by username (for login)
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users_by_username (
+    username text PRIMARY KEY,
+    id uuid,
+    email text,
+    password_hash text,
+    name text,
+    image_url text,
+    created_at timestamp,
+    updated_at timestamp
+);
+
+-- --------------------------------------------------------------------
+-- users_by_email: Look up user by email
+-- Query: Get user by email (for password reset, duplicate check)
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users_by_email (
+    email text PRIMARY KEY,
+    id uuid,
+    username text,
+    password_hash text,
+    name text,
+    image_url text,
+    created_at timestamp,
+    updated_at timestamp
+);
+
+-- ====================================================================
+-- PROFILES (Legacy - keeping for backward compatibility)
 -- ====================================================================
 
 -- --------------------------------------------------------------------
@@ -23,7 +72,7 @@ USE discord_app;
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS profiles_by_id (
     id uuid PRIMARY KEY,
-    user_id text,           -- Clerk userId
+    user_id text,           -- Legacy Clerk userId or username
     name text,
     image_url text,
     email text,
@@ -32,8 +81,8 @@ CREATE TABLE IF NOT EXISTS profiles_by_id (
 );
 
 -- --------------------------------------------------------------------
--- profiles_by_user_id: Look up profile by Clerk userId
--- Query: Get profile by Clerk userId (for authentication)
+-- profiles_by_user_id: Look up profile by user identifier
+-- Query: Get profile by user identifier (for authentication)
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS profiles_by_user_id (
     user_id text PRIMARY KEY,
@@ -44,6 +93,86 @@ CREATE TABLE IF NOT EXISTS profiles_by_user_id (
     created_at timestamp,
     updated_at timestamp
 );
+
+-- ====================================================================
+-- FRIENDS (Friend Management System)
+-- ====================================================================
+
+-- --------------------------------------------------------------------
+-- friend_requests_by_id: Main friend request storage
+-- Query: Get friend request details by request ID
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS friend_requests_by_id (
+    id uuid PRIMARY KEY,
+    sender_id uuid,
+    receiver_id uuid,
+    status text,            -- PENDING, ACCEPTED, REJECTED
+    created_at timestamp,
+    updated_at timestamp
+);
+
+-- --------------------------------------------------------------------
+-- friend_requests_by_sender: Get all friend requests sent by a user
+-- Query: List outgoing friend requests for a user
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS friend_requests_by_sender (
+    sender_id uuid,
+    created_at timestamp,
+    id uuid,
+    receiver_id uuid,
+    receiver_username text,  -- Denormalized
+    receiver_name text,      -- Denormalized
+    receiver_image_url text, -- Denormalized
+    status text,
+    updated_at timestamp,
+    PRIMARY KEY ((sender_id), created_at, id)
+) WITH CLUSTERING ORDER BY (created_at DESC, id DESC);
+
+-- --------------------------------------------------------------------
+-- friend_requests_by_receiver: Get all friend requests received by a user
+-- Query: List incoming friend requests for a user
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS friend_requests_by_receiver (
+    receiver_id uuid,
+    created_at timestamp,
+    id uuid,
+    sender_id uuid,
+    sender_username text,    -- Denormalized
+    sender_name text,        -- Denormalized
+    sender_image_url text,   -- Denormalized
+    status text,
+    updated_at timestamp,
+    PRIMARY KEY ((receiver_id), created_at, id)
+) WITH CLUSTERING ORDER BY (created_at DESC, id DESC);
+
+-- --------------------------------------------------------------------
+-- friend_requests_by_users: Look up friend request between two users
+-- Query: Check if friend request exists between two users
+-- Note: Need to check both directions (sender, receiver) and (receiver, sender)
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS friend_requests_by_users (
+    user_one_id uuid,
+    user_two_id uuid,
+    id uuid,
+    status text,
+    created_at timestamp,
+    PRIMARY KEY ((user_one_id, user_two_id))
+);
+
+-- --------------------------------------------------------------------
+-- friends_by_user: Get all friends for a user
+-- Query: List all accepted friends for a user
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS friends_by_user (
+    user_id uuid,
+    friend_id uuid,
+    friend_username text,    -- Denormalized
+    friend_name text,        -- Denormalized
+    friend_image_url text,   -- Denormalized
+    friend_email text,       -- Denormalized
+    became_friends_at timestamp,
+    PRIMARY KEY ((user_id), became_friends_at, friend_id)
+) WITH CLUSTERING ORDER BY (became_friends_at DESC, friend_id ASC);
 
 -- ====================================================================
 -- SERVERS

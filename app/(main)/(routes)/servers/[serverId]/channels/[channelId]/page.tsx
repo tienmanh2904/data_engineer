@@ -1,5 +1,4 @@
 import { currentProfile } from "@/lib/currentProfile";
-import { redirectToSignIn } from "@clerk/nextjs";
 import { db } from "@/lib/db";
 import React from "react";
 import { redirect } from "next/navigation";
@@ -18,7 +17,7 @@ interface PageProps {
 
 const Page = async ({ params }: PageProps) => {
   const profile = await currentProfile();
-  if (!profile) return redirectToSignIn();
+  if (!profile) return redirect("/sign-in");
   
   // Get channel
   const channelResult = await db.execute(
