@@ -161,3 +161,95 @@ const createConversation = async (
     return null;
   }
 };
+
+export const getOrCreateProfileConversation = async (
+  profileOneId: string,
+  profileTwoId: string
+) => {
+  let conversation =
+    (await findProfileConversation(profileOneId, profileTwoId)) ||
+    (await findProfileConversation(profileTwoId, profileOneId));
+
+  if (!conversation) {
+    conversation = await createProfileConversation(profileOneId, profileTwoId);
+  }
+  return conversation;
+};
+
+const findProfileConversation = async (
+  profileOneId: string,
+  profileTwoId: string
+) => {
+  try {
+    const result = await db.execute(
+      'SELECT * FROM conversations_by_profiles WHERE profile_one_id = ? AND profile_two_id = ?',
+      [profileOneId, profileTwoId],
+      { prepare: true }
+    );
+
+    if (result.rows.length === 0) return null;
+
+    const conversationId = result.rows[0].id;
+    
+    // Get full conversation details
+    const conversationResult = await db.execute(
+      'SELECT * FROM conversations_by_id WHERE id = ?',
+      [conversationId],
+      { prepare: true }
+    );
+
+    if (conversationResult.rows.length === 0) return null;
+    const conv = conversationResult.rows[0];
+
+    // Fetch Profiles instead of Members
+    const profileOneResult = await db.execute(
+      'SELECT * FROM profiles_by_id WHERE id = ?',
+      [conv.member_one_id], // In this context, member_one_id stores the PROFILE ID
+      { prepare: true }
+    );
+    const profileTwoResult = await db.execute(
+      'SELECT * FROM profiles_by_id WHERE id = ?',
+      [conv.member_two_id], // In this context, member_two_id stores the PROFILE ID
+      { prepare: true }
+    );
+
+    if (profileOneResult.rows.length === 0 || profileTwoResult.rows.length === 0) return null;
+
+    return {
+      id: conv.id,
+      memberOneId: conv.member_one_id,
+      memberTwoId: conv.member_two_id,
+      memberOne: { profileId: conv.member_one_id, profile: profileOneResult.rows[0] }, // Mock Member Object
+      memberTwo: { profileId: conv.member_two_id, profile: profileTwoResult.rows[0] }, // Mock Member Object
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+const createProfileConversation = async (
+  profileOneId: string,
+  profileTwoId: string
+) => {
+  try {
+    const conversationId = uuidv4();
+    const now = new Date();
+
+    const queries = [
+      {
+        query: 'INSERT INTO conversations_by_id (id, member_one_id, member_two_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        params: [conversationId, profileOneId, profileTwoId, now, now]
+      },
+      {
+        query: 'INSERT INTO conversations_by_profiles (profile_one_id, profile_two_id, id, created_at) VALUES (?, ?, ?, ?)',
+        params: [profileOneId, profileTwoId, conversationId, now]
+      }
+    ];
+
+    await db.batch(queries, { prepare: true });
+    return await findProfileConversation(profileOneId, profileTwoId);
+  } catch (error) {
+    console.error('[CREATE_PROFILE_CONVERSATION_ERROR]', error);
+    return null;
+  }
+};

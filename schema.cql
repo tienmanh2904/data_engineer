@@ -404,7 +404,16 @@ CREATE TABLE IF NOT EXISTS direct_messages_by_conversation (
     updated_at timestamp,
     PRIMARY KEY ((conversation_id), created_at, id)
 ) WITH CLUSTERING ORDER BY (created_at DESC, id DESC);
-
+-- --------------------------------------------------------------------
+-- conversations_by_profiles: Look up conversation by two profiles (Friends)
+-- --------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS conversations_by_profiles (
+    profile_one_id uuid,
+    profile_two_id uuid,
+    id uuid,
+    created_at timestamp,
+    PRIMARY KEY ((profile_one_id, profile_two_id))
+);
 -- ====================================================================
 -- INDEXES (Secondary indexes for common queries)
 -- ====================================================================

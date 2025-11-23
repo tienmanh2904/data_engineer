@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
     // Check if already friends
     const existingFriend = await db.execute(
-      'SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ?',
+      'SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ? ALLOW FILTERING', 
       [profile.id, receiver.id],
       { prepare: true }
     );
