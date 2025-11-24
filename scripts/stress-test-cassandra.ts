@@ -2,11 +2,24 @@ import { Client } from 'cassandra-driver';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 
-// Configuration
+// Configuration from environment or command line
+const CASSANDRA_HOST = process.env.CASSANDRA_HOST || process.argv[2] || 'localhost';
+const CASSANDRA_DC = process.env.CASSANDRA_DC || 'dc1';
+const CASSANDRA_KEYSPACE = process.env.CASSANDRA_KEYSPACE || 'discord_app';
+const TOTAL_MESSAGES = parseInt(process.env.TOTAL_MESSAGES || process.argv[3] || '1000000');
+const CONCURRENCY_LIMIT = parseInt(process.env.CONCURRENCY || process.argv[4] || '2000');
+
+console.log('\n🎯 Stress Test Configuration:');
+console.log(`   Cassandra Host: ${CASSANDRA_HOST}`);
+console.log(`   Data Center: ${CASSANDRA_DC}`);
+console.log(`   Keyspace: ${CASSANDRA_KEYSPACE}`);
+console.log(`   Total Messages: ${TOTAL_MESSAGES.toLocaleString()}`);
+console.log(`   Concurrency: ${CONCURRENCY_LIMIT}\n`);
+
 const client = new Client({
-  contactPoints: ['localhost'],
-  localDataCenter: 'dc1',
-  keyspace: 'discord_app',
+  contactPoints: [CASSANDRA_HOST],
+  localDataCenter: CASSANDRA_DC,
+  keyspace: CASSANDRA_KEYSPACE,
   pooling: {
     // Increase connection pool to handle high concurrency
     maxRequestsPerConnection: 32768,
@@ -19,17 +32,24 @@ const client = new Client({
   isMetadataSyncEnabled: false 
 });
 
-const TOTAL_MESSAGES = 1_000_000;
-const CONCURRENCY_LIMIT = 2000; // Number of parallel requests
-
 async function run() {
-  // 1. Load targets
-  const config = JSON.parse(fs.readFileSync('stress-test-config.json', 'utf-8'));
-  
-  await client.connect();
-  console.log(`🚀 Starting Cassandra Stress Test: ${TOTAL_MESSAGES} messages`);
-  console.log(`   Target: Distributed across ${config.length} servers`);
-  console.log(`   Concurrency: ${CONCURRENCY_LIMIT} parallel requests`);
+  try {
+    // 1. Load targets
+    if (!fs.existsSync('stress-test-config.json')) {
+      console.error('❌ Error: stress-test-config.json not found!');
+      console.log('   Run seed-stress-data.ts first to generate test data.');
+      process.exit(1);
+    }
+    
+    const config = JSON.parse(fs.readFileSync('stress-test-config.json', 'utf-8'));
+    
+    console.log('🔌 Connecting to Cassandra...');
+    await client.connect();
+    console.log('✅ Connected successfully!\n');
+    
+    console.log(`🚀 Starting Cassandra Stress Test: ${TOTAL_MESSAGES.toLocaleString()} messages`);
+    console.log(`   Target: Distributed across ${config.length} servers`);
+    console.log(`   Concurrency: ${CONCURRENCY_LIMIT} parallel requests`);
 
   const startTime = Date.now();
   let completed = 0;
@@ -91,8 +111,23 @@ async function run() {
   console.log('\n📊 Cassandra Results:');
   console.log(`   Total Time: ${duration.toFixed(2)}s`);
   console.log(`   Throughput: ${(TOTAL_MESSAGES / duration).toFixed(0)} messages/sec`);
+  console.log(`   Average Latency: ${(duration / TOTAL_MESSAGES * 1000).toFixed(2)}ms per message`);
   
   await client.shutdown();
+  console.log('\n👋 Disconnected from Cassandra');
+  } catch (error) {
+    console.error('\n❌ Error during stress test:', error);
+    await client.shutdown();
+    process.exit(1);
+  }
 }
+
+console.log('📝 Usage:');
+console.log('  ts-node stress-test-cassandra.ts [cassandra_host] [total_messages] [concurrency]');
+console.log('  OR set environment variables: CASSANDRA_HOST, TOTAL_MESSAGES, CONCURRENCY');
+console.log('\nExamples:');
+console.log('  ts-node stress-test-cassandra.ts 143.198.123.45');
+console.log('  ts-node stress-test-cassandra.ts 143.198.123.45 500000 1000');
+console.log('  CASSANDRA_HOST=143.198.123.45 TOTAL_MESSAGES=100000 ts-node stress-test-cassandra.ts\n');
 
 run().catch(console.error);
