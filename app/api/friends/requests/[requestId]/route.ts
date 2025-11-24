@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { currentProfile } from "@/lib/currentProfile";
 import { db } from "@/lib/db";
+
 export const dynamic = "force-dynamic";
+
 // Accept or reject a friend request
 export async function PATCH(
   req: Request,
@@ -21,6 +23,7 @@ export async function PATCH(
     }
 
     // Get the friend request
+    // We need 'created_at' and 'sender_id' to update the other tables
     const requestResult = await db.execute(
       'SELECT * FROM friend_requests_by_id WHERE id = ?',
       [requestId],
@@ -45,7 +48,7 @@ export async function PATCH(
     const now = new Date();
     const newStatus = action === 'accept' ? 'ACCEPTED' : 'REJECTED';
 
-    // Get sender info for denormalization
+    // Get sender info for friend insertion
     const senderResult = await db.execute(
       'SELECT * FROM users_by_id WHERE id = ?',
       [request.sender_id],
@@ -58,7 +61,7 @@ export async function PATCH(
 
     const sender = senderResult.rows[0];
 
-    // Get receiver info for denormalization
+    // Get receiver info for friend insertion
     const receiverResult = await db.execute(
       'SELECT * FROM users_by_id WHERE id = ?',
       [request.receiver_id],
@@ -67,11 +70,31 @@ export async function PATCH(
 
     const receiver = receiverResult.rows[0];
 
+    // =================================================================================
+    // FIX: Update ALL denormalized tables so the UI reflects the change immediately
+    // =================================================================================
     const queries = [
-      // Update friend_requests_by_id
+      // 1. Update Main Table
       {
         query: 'UPDATE friend_requests_by_id SET status = ?, updated_at = ? WHERE id = ?',
         params: [newStatus, now, requestId]
+      },
+      // 2. Update Sender's View (so they see it was accepted)
+      // Key: ((sender_id), created_at, id)
+      {
+        query: 'UPDATE friend_requests_by_sender SET status = ?, updated_at = ? WHERE sender_id = ? AND created_at = ? AND id = ?',
+        params: [newStatus, now, request.sender_id, request.created_at, requestId]
+      },
+      // 3. Update Receiver's View (so it disappears from your "Pending" list)
+      // Key: ((receiver_id), created_at, id)
+      {
+        query: 'UPDATE friend_requests_by_receiver SET status = ?, updated_at = ? WHERE receiver_id = ? AND created_at = ? AND id = ?',
+        params: [newStatus, now, request.receiver_id, request.created_at, requestId]
+      },
+      // 4. Update the Lookup Table (used to check if request exists)
+      {
+        query: 'UPDATE friend_requests_by_users SET status = ? WHERE user_one_id = ? AND user_two_id = ?',
+        params: [newStatus, request.sender_id, request.receiver_id]
       }
     ];
 
@@ -94,10 +117,6 @@ export async function PATCH(
     }
 
     await db.batch(queries, { prepare: true });
-
-    // Note: We're not updating the denormalized tables (friend_requests_by_sender/receiver)
-    // because Cassandra doesn't support efficient updates on clustering columns
-    // The status will remain PENDING in those tables, but the main table has the correct status
 
     return NextResponse.json({
       id: requestId,
@@ -123,7 +142,6 @@ export async function DELETE(
 
     const { requestId } = params;
 
-    // Get the friend request
     const requestResult = await db.execute(
       'SELECT * FROM friend_requests_by_id WHERE id = ?',
       [requestId],
@@ -136,16 +154,23 @@ export async function DELETE(
 
     const request = requestResult.rows[0];
 
-    // Verify that the current user is the sender (can only cancel own requests)
     if (request.sender_id.toString() !== profile.id) {
       return new NextResponse("Unauthorized to delete this request", { status: 403 });
     }
 
-    // Delete from all tables
+    // FIX: Delete from ALL tables to ensure it disappears everywhere
     const queries = [
       {
         query: 'DELETE FROM friend_requests_by_id WHERE id = ?',
         params: [requestId]
+      },
+      {
+        query: 'DELETE FROM friend_requests_by_sender WHERE sender_id = ? AND created_at = ? AND id = ?',
+        params: [request.sender_id, request.created_at, requestId]
+      },
+      {
+        query: 'DELETE FROM friend_requests_by_receiver WHERE receiver_id = ? AND created_at = ? AND id = ?',
+        params: [request.receiver_id, request.created_at, requestId]
       },
       {
         query: 'DELETE FROM friend_requests_by_users WHERE user_one_id = ? AND user_two_id = ?',
