@@ -9,27 +9,30 @@ const CASSANDRA_KEYSPACE = process.env.CASSANDRA_KEYSPACE || 'discord_app';
 const TOTAL_MESSAGES = parseInt(process.env.TOTAL_MESSAGES || process.argv[3] || '1000000');
 const CONCURRENCY_LIMIT = parseInt(process.env.CONCURRENCY || process.argv[4] || '2000');
 
+// --- CSV LOGGING SETUP ---
+const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-');
+const LOG_FILE = `benchmark-results-${TIMESTAMP}.csv`;
+// Write Headers
+fs.writeFileSync(LOG_FILE, 'Elapsed_Seconds,Total_Written,Instant_TPS,Average_TPS,Total_Errors\n');
+
 console.log('------------------------------------------------');
 console.log(`🎯 TARGET: ${CASSANDRA_HOST}`);
 console.log(`📨 MESSAGES: ${TOTAL_MESSAGES.toLocaleString()}`);
 console.log(`🌊 CONCURRENCY: ${CONCURRENCY_LIMIT}`);
+console.log(`📝 LOG FILE: ${LOG_FILE}`);
 console.log('------------------------------------------------');
 
 const client = new Client({
   contactPoints: [CASSANDRA_HOST],
   localDataCenter: CASSANDRA_DC,
   keyspace: CASSANDRA_KEYSPACE,
-  // CRITICAL FOR WAN TESTING: Increase timeouts
   socketOptions: {
     readTimeout: 12000,
     connectTimeout: 10000,
   },
   pooling: {
     maxRequestsPerConnection: 32768,
-    coreConnectionsPerHost: {
-      [0]: 2, 
-      [1]: 2 
-    }
+    coreConnectionsPerHost: { [0]: 2, [1]: 2 }
   },
   isMetadataSyncEnabled: false 
 });
@@ -47,7 +50,9 @@ async function run() {
     console.log('✅ Connected! Starting stress test...');
 
     const startTime = Date.now();
+    let lastLogTime = startTime;
     let completed = 0;
+    let lastCompleted = 0;
     let errors = 0;
 
     const writeMessage = async () => {
@@ -67,38 +72,48 @@ async function run() {
           }
         ];
 
-        // OPTIMIZATION: Use localOne consistency for WAN testing
         await client.batch(queries, { 
           prepare: true,
           consistency: types.consistencies.localOne 
         });
         
         completed++;
-        if (completed % 5000 === 0) {
-          const elapsed = (Date.now() - startTime) / 1000;
-          const rate = (completed / elapsed).toFixed(0);
-          console.log(`   ... ${completed} written (${rate} msg/s) | Errors: ${errors}`);
+        
+        // Log to CSV every 2000 messages (Small interval = smoother chart)
+        if (completed % 2000 === 0) {
+          const nowTime = Date.now();
+          const totalElapsed = (nowTime - startTime) / 1000;
+          
+          // Calculate Instant Throughput (Speed since last log)
+          const intervalSeconds = (nowTime - lastLogTime) / 1000;
+          const messagesInInterval = completed - lastCompleted;
+          const instantTPS = (messagesInInterval / intervalSeconds).toFixed(0);
+          
+          // Calculate Average Throughput (Speed since start)
+          const averageTPS = (completed / totalElapsed).toFixed(0);
+
+          // Write to CSV
+          const csvRow = `${totalElapsed.toFixed(2)},${completed},${instantTPS},${averageTPS},${errors}\n`;
+          fs.appendFileSync(LOG_FILE, csvRow);
+          
+          process.stdout.write(`\r   ... ${completed} written. Instant: ${instantTPS}/s | Avg: ${averageTPS}/s | Err: ${errors}   `);
+
+          // Update tracking variables
+          lastLogTime = nowTime;
+          lastCompleted = completed;
         }
       } catch (err: any) {
         errors++;
-        // Optional: Log sporadic errors if needed
-        // console.error(err.message);
       }
     };
 
-    // --- Sliding Window Pattern ---
     const activePromises = new Set();
 
     for (let i = 0; i < TOTAL_MESSAGES; i++) {
       const promise = writeMessage();
       activePromises.add(promise);
-
-      // CRITICAL FIX: Use .finally() so errors don't hang the script
       promise.finally(() => activePromises.delete(promise));
-
-      if (activePromises.size >= CONCURRENCY_LIMIT) {
-        await Promise.race(activePromises);
-      }
+      if (activePromises.size >= CONCURRENCY_LIMIT) await Promise.race(activePromises);
     }
 
     await Promise.all(activePromises);
@@ -106,10 +121,10 @@ async function run() {
     const endTime = Date.now();
     const duration = (endTime - startTime) / 1000;
     
-    console.log('\n📊 RESULTS:');
+    console.log('\n\n📊 RESULTS:');
     console.log(`   Total Time: ${duration.toFixed(2)}s`);
     console.log(`   Throughput: ${(TOTAL_MESSAGES / duration).toFixed(0)} messages/sec`);
-    console.log(`   Total Errors: ${errors}`);
+    console.log(`   Data saved to: ${LOG_FILE}`);
     
     await client.shutdown();
   } catch (error) {
