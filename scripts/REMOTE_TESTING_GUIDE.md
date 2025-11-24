@@ -87,6 +87,7 @@ $env:CASSANDRA_HOST="YOUR_DROPLET_IP"; npx ts-node seed-stress-data.ts
 
 # Method 3: Generate more servers
 npx ts-node seed-stress-data.ts YOUR_DROPLET_IP 5000
+npx ts-node seed-stress-data.ts 159.223.51.176 1000
 ```
 
 **Example:**
@@ -103,9 +104,11 @@ Execute the stress test against remote Cassandra:
 ```powershell
 # Default: 1M messages, 2000 concurrency
 npx ts-node stress-test-cassandra.ts YOUR_DROPLET_IP
-
+npx ts-node stress-test-cassandra.ts 159.223.51.176 250000
 # Custom: 500K messages, 1000 concurrency
 npx ts-node stress-test-cassandra.ts YOUR_DROPLET_IP 500000 1000
+# 250,000 messages
+
 
 # Using environment variables
 $env:CASSANDRA_HOST="YOUR_DROPLET_IP"; $env:TOTAL_MESSAGES="100000"; $env:CONCURRENCY="500"; npx ts-node stress-test-cassandra.ts
@@ -113,7 +116,7 @@ $env:CASSANDRA_HOST="YOUR_DROPLET_IP"; $env:TOTAL_MESSAGES="100000"; $env:CONCUR
 
 **Example:**
 ```powershell
-npx ts-node stress-test-cassandra.ts 143.198.123.45 1000000 2000
+npx ts-node stress-test-cassandra.ts 152.42.243.76 250000 500
 ```
 
 ## Configuration Options
