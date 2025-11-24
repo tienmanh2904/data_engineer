@@ -45,8 +45,8 @@ npm install -g pm2
 ```bash
 ufw allow OpenSSH
 ufw allow 'Nginx Full'
-ufw allow 3000  # Next.js (can be closed after nginx setup)
-ufw allow 9042  # Cassandra (only if external access needed)
+ufw allow 3000  
+ufw allow 9042  
 ufw enable
 ```
 
@@ -103,7 +103,7 @@ NEXT_PUBLIC_SITE_URL=https://yourdomain.com
 npm run build
 
 # Start with PM2
-pm2 start npm --name "discord-app" -- start -- --log-level info
+pm2 start npm --name "discord-app" -- start
 pm2 save
 pm2 startup
 ```
