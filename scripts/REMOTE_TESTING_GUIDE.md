@@ -107,8 +107,8 @@ npx ts-node stress-test-cassandra.ts YOUR_DROPLET_IP
 npx ts-node stress-test-cassandra.ts 159.223.51.176 250000
 # Custom: 500K messages, 1000 concurrency
 npx ts-node stress-test-cassandra.ts YOUR_DROPLET_IP 500000 1000
-152.42.243.76
 npx ts-node stress-test-cassandra.ts 152.42.243.76 500000 1000
+npx ts-node stress-test-cassandra.ts 159.223.51.176 500000 1000
 # 250,000 messages
 
 
