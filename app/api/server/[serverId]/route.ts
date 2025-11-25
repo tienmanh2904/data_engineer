@@ -17,7 +17,7 @@ export async function PATCH(
     }
     const { name, imageUrl } = await req.json();
 
-    // Verify ownership
+    // 1. Verify ownership
     const serverResult = await db.execute(
       'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ?',
       [serverId, profile.id],
@@ -31,7 +31,17 @@ export async function PATCH(
     const oldServer = serverResult.rows[0];
     const now = new Date();
 
-    // Update server in multiple tables
+    // 2. FETCH MISSING KEY: Get 'joined_at' from servers_by_profile
+    // We need this to update the specific row in servers_by_profile
+    const profileLinkResult = await db.execute(
+      'SELECT joined_at FROM servers_by_profile WHERE profile_id = ? AND server_id = ? ALLOW FILTERING',
+      [profile.id, serverId],
+      { prepare: true }
+    );
+
+    const joinedAt = profileLinkResult.rows.length > 0 ? profileLinkResult.rows[0].joined_at : null;
+
+    // 3. Prepare Update Queries
     const queries = [
       // Update main server table
       {
@@ -42,13 +52,16 @@ export async function PATCH(
       {
         query: 'UPDATE servers_by_invite_code SET server_name = ?, server_image_url = ? WHERE invite_code = ?',
         params: [name, imageUrl, oldServer.invite_code]
-      },
-      // Update server-profile relationship
-      {
-        query: 'UPDATE servers_by_profile SET server_name = ?, server_image_url = ? WHERE profile_id = ? AND server_id = ?',
-        params: [name, imageUrl, profile.id, serverId]
       }
     ];
+
+    // Only add the profile update if we found the valid clustering key
+    if (joinedAt) {
+      queries.push({
+        query: 'UPDATE servers_by_profile SET server_name = ?, server_image_url = ? WHERE profile_id = ? AND joined_at = ? AND server_id = ?',
+        params: [name, imageUrl, profile.id, joinedAt, serverId]
+      });
+    }
 
     await db.batch(queries, { prepare: true });
 
@@ -62,12 +75,15 @@ export async function PATCH(
       updatedAt: now
     });
   } catch (error) {
-    console.log("[Server Setting Update Error]", error);
+    console.log("[SERVER_PATCH_ERROR]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
 
-export async function DELETE(req:Request,{ params }: { params: { serverId: string } }) {
+export async function DELETE(
+  req: Request, 
+  { params }: { params: { serverId: string } }
+) {
   try {
     const profile = await currentProfile();
     if (!profile) {
@@ -78,7 +94,7 @@ export async function DELETE(req:Request,{ params }: { params: { serverId: strin
       return new NextResponse("Bad Request", { status: 400 });
     }
 
-    // Verify ownership
+    // 1. Verify ownership
     const serverResult = await db.execute(
       'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ? ALLOW FILTERING',
       [serverId, profile.id],
@@ -91,7 +107,16 @@ export async function DELETE(req:Request,{ params }: { params: { serverId: strin
 
     const server = serverResult.rows[0];
 
-    // Delete server from all tables (Note: In production, consider soft delete or cascade handling)
+    // 2. FETCH MISSING KEY: Get 'joined_at' from servers_by_profile
+    const profileLinkResult = await db.execute(
+      'SELECT joined_at FROM servers_by_profile WHERE profile_id = ? AND server_id = ? ALLOW FILTERING',
+      [profile.id, serverId],
+      { prepare: true }
+    );
+
+    const joinedAt = profileLinkResult.rows.length > 0 ? profileLinkResult.rows[0].joined_at : null;
+
+    // 3. Prepare Delete Queries
     const queries = [
       // Delete from main server table
       {
@@ -102,18 +127,18 @@ export async function DELETE(req:Request,{ params }: { params: { serverId: strin
       {
         query: 'DELETE FROM servers_by_invite_code WHERE invite_code = ?',
         params: [server.invite_code]
-      },
-      // Delete from server-profile relationship
-      {
-        query: 'DELETE FROM servers_by_profile WHERE profile_id = ? AND server_id = ?',
-        params: [profile.id, serverId]
       }
     ];
 
-    await db.batch(queries, { prepare: true });
+    // Only add the profile delete if we found the valid clustering key
+    if (joinedAt) {
+      queries.push({
+        query: 'DELETE FROM servers_by_profile WHERE profile_id = ? AND joined_at = ? AND server_id = ?',
+        params: [profile.id, joinedAt, serverId]
+      });
+    }
 
-    // Note: Consider also deleting related channels, members, and messages
-    // This might require additional queries to get all related data first
+    await db.batch(queries, { prepare: true });
 
     return NextResponse.json({
       id: server.id,
