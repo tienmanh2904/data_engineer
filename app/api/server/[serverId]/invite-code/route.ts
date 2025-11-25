@@ -19,7 +19,7 @@ export async function PATCH(
 
     // Verify ownership and get current server
     const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ?',
+      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ? ALLOW FILTERING',
       [serverId, profile.id],
       { prepare: true }
     );

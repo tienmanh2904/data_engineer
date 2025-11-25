@@ -19,7 +19,7 @@ export async function PATCH(
 
     // 1. Verify ownership
     const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ?',
+      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ? ALLOW FILTERING',
       [serverId, profile.id],
       { prepare: true }
     );

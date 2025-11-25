@@ -25,7 +25,7 @@ export async function PATCH(
 
     // Verify user is the server owner
     const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ?',
+      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ? ALLOW FILTERING',
       [serverId, profile.id],
       { prepare: true }
     );
@@ -151,7 +151,7 @@ export async function DELETE(
 
     // Verify user is the server owner
     const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ?',
+      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ? ALLOW FILTERING',
       [serverId, profile.id],
       { prepare: true }
     );

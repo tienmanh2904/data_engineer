@@ -138,8 +138,7 @@ SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ?
 -- Get friends list
 SELECT * FROM friends_by_user WHERE user_id = ?
 
--- Remove friend (2 deletes)
-DELETE FROM friends_by_user WHERE user_id = ? AND became_friends_at = ? AND friend_id = ?
+-- Remove friend (1 deletes)
 DELETE FROM friends_by_user WHERE user_id = ? AND became_friends_at = ? AND friend_id = ?
 ```
 
