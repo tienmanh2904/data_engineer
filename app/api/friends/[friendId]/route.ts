@@ -16,8 +16,9 @@ export async function DELETE(
     const { friendId } = params;
 
     // Verify friendship exists
+    // FIX: Added ALLOW FILTERING because we are skipping 'became_friends_at'
     const friendshipResult = await db.execute(
-      'SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ?',
+      'SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ? ALLOW FILTERING',
       [profile.id, friendId],
       { prepare: true }
     );
@@ -35,13 +36,12 @@ export async function DELETE(
         query: 'DELETE FROM friends_by_user WHERE user_id = ? AND became_friends_at = ? AND friend_id = ?',
         params: [profile.id, friendship.became_friends_at, friendId]
       },
-      // We need to get the reverse friendship to delete it properly
-      // Since we don't have became_friends_at for the reverse, we need to query it first
     ];
 
     // Get reverse friendship
+    // FIX: Added ALLOW FILTERING here as well for the reverse lookup
     const reverseFriendshipResult = await db.execute(
-      'SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ?',
+      'SELECT * FROM friends_by_user WHERE user_id = ? AND friend_id = ? ALLOW FILTERING',
       [friendId, profile.id],
       { prepare: true }
     );

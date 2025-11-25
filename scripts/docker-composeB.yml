@@ -1,0 +1,40 @@
+version: '3'
+
+services:
+  cassandra-2:
+    image: cassandra:4.1
+    container_name: cassandra-2
+    restart: always
+    
+    # CRITICAL CHANGE: Use Host Networking
+    network_mode: host
+    
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ChatAppCluster
+      - CASSANDRA_DC=dc1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_NUM_TOKENS=256
+
+      # --- NETWORK BINDING ---
+      # Bind to Droplet B's Private IP
+      - CASSANDRA_LISTEN_ADDRESS=10.104.0.3
+
+      # --- INTERNAL GOSSIP ---
+      - CASSANDRA_BROADCAST_ADDRESS=10.104.0.3
+      
+      # SEED: Point to Droplet A's Private IP
+      - CASSANDRA_SEEDS=10.104.0.2
+
+      # --- CLIENT ACCESS ---
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0
+      # Droplet B Public IP
+      - CASSANDRA_BROADCAST_RPC_ADDRESS=152.42.243.76
+
+      # --- MEMORY TUNING ---
+      - MAX_HEAP_SIZE=8G
+      - HEAP_NEWSIZE=2G
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+
+volumes:
+  cassandra-data:

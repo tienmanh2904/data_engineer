@@ -1,133 +1,136 @@
-import { Client } from 'cassandra-driver';
+import { Client, types } from 'cassandra-driver';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 
-// Configuration from environment or command line
+// Configuration
 const CASSANDRA_HOST = process.env.CASSANDRA_HOST || process.argv[2] || 'localhost';
 const CASSANDRA_DC = process.env.CASSANDRA_DC || 'dc1';
 const CASSANDRA_KEYSPACE = process.env.CASSANDRA_KEYSPACE || 'discord_app';
 const TOTAL_MESSAGES = parseInt(process.env.TOTAL_MESSAGES || process.argv[3] || '1000000');
 const CONCURRENCY_LIMIT = parseInt(process.env.CONCURRENCY || process.argv[4] || '2000');
 
-console.log('\n🎯 Stress Test Configuration:');
-console.log(`   Cassandra Host: ${CASSANDRA_HOST}`);
-console.log(`   Data Center: ${CASSANDRA_DC}`);
-console.log(`   Keyspace: ${CASSANDRA_KEYSPACE}`);
-console.log(`   Total Messages: ${TOTAL_MESSAGES.toLocaleString()}`);
-console.log(`   Concurrency: ${CONCURRENCY_LIMIT}\n`);
+// --- CSV LOGGING SETUP ---
+const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-');
+const LOG_FILE = `benchmark-results-${TIMESTAMP}.csv`;
+// Write Headers
+fs.writeFileSync(LOG_FILE, 'Elapsed_Seconds,Total_Written,Instant_TPS,Average_TPS,Total_Errors\n');
+
+console.log('------------------------------------------------');
+console.log(`🎯 TARGET: ${CASSANDRA_HOST}`);
+console.log(`📨 MESSAGES: ${TOTAL_MESSAGES.toLocaleString()}`);
+console.log(`🌊 CONCURRENCY: ${CONCURRENCY_LIMIT}`);
+console.log(`📝 LOG FILE: ${LOG_FILE}`);
+console.log('------------------------------------------------');
 
 const client = new Client({
   contactPoints: [CASSANDRA_HOST],
   localDataCenter: CASSANDRA_DC,
   keyspace: CASSANDRA_KEYSPACE,
-  pooling: {
-    // Increase connection pool to handle high concurrency
-    maxRequestsPerConnection: 32768,
-    coreConnectionsPerHost: {
-      [0]: 2, // LOCAL
-      [1]: 2  // REMOTE
-    }
+  socketOptions: {
+    readTimeout: 12000,
+    connectTimeout: 10000,
   },
-  // Disable query tracing to save bandwidth during stress test
+  pooling: {
+    maxRequestsPerConnection: 32768,
+    coreConnectionsPerHost: { [0]: 2, [1]: 2 }
+  },
   isMetadataSyncEnabled: false 
 });
 
 async function run() {
   try {
-    // 1. Load targets
     if (!fs.existsSync('stress-test-config.json')) {
-      console.error('❌ Error: stress-test-config.json not found!');
-      console.log('   Run seed-stress-data.ts first to generate test data.');
-      process.exit(1);
+      throw new Error('stress-test-config.json not found! Run seed script first.');
     }
     
     const config = JSON.parse(fs.readFileSync('stress-test-config.json', 'utf-8'));
     
-    console.log('🔌 Connecting to Cassandra...');
+    console.log('🔌 Connecting...');
     await client.connect();
-    console.log('✅ Connected successfully!\n');
-    
-    console.log(`🚀 Starting Cassandra Stress Test: ${TOTAL_MESSAGES.toLocaleString()} messages`);
-    console.log(`   Target: Distributed across ${config.length} servers`);
-    console.log(`   Concurrency: ${CONCURRENCY_LIMIT} parallel requests`);
+    console.log('✅ Connected! Starting stress test...');
 
-  const startTime = Date.now();
-  let completed = 0;
+    const startTime = Date.now();
+    let lastLogTime = startTime;
+    let completed = 0;
+    let lastCompleted = 0;
+    let errors = 0;
 
-  // 2. Define the write operation
-  const writeMessage = async () => {
-    const target = config[Math.floor(Math.random() * config.length)];
-    const messageId = uuidv4();
-    const now = new Date();
+    const writeMessage = async () => {
+      try {
+        const target = config[Math.floor(Math.random() * config.length)];
+        const messageId = uuidv4();
+        const now = new Date();
 
-    // We use a BATCH to ensure atomicity and efficiency
-    // Ideally, prepared statements are prepared once, but the driver handles caching.
-    const queries = [
-      {
-        query: 'INSERT INTO messages_by_id (id, content, file_url, member_id, channel_id, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        params: [messageId, "Stress test message content payload", null, target.memberId, target.channelId, false, now, now]
-      },
-      {
-        query: 'INSERT INTO messages_by_channel (channel_id, created_at, id, content, file_url, member_id, member_profile_id, member_profile_name, member_profile_image_url, member_role, deleted, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        params: [target.channelId, now, messageId, "Stress test message content payload", null, target.memberId, target.profileId, "Tester", "http://img", "GUEST", false, now]
+        const queries = [
+          {
+            query: 'INSERT INTO messages_by_id (id, content, file_url, member_id, channel_id, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            params: [messageId, "Stress test message content payload", null, target.memberId, target.channelId, false, now, now]
+          },
+          {
+            query: 'INSERT INTO messages_by_channel (channel_id, created_at, id, content, file_url, member_id, member_profile_id, member_profile_name, member_profile_image_url, member_role, deleted, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            params: [target.channelId, now, messageId, "Stress test message content payload", null, target.memberId, target.profileId, "Tester", "http://img", "GUEST", false, now]
+          }
+        ];
+
+        await client.batch(queries, { 
+          prepare: true,
+          consistency: types.consistencies.localOne 
+        });
+        
+        completed++;
+        
+        // Log to CSV every 2000 messages (Small interval = smoother chart)
+        if (completed % 2000 === 0) {
+          const nowTime = Date.now();
+          const totalElapsed = (nowTime - startTime) / 1000;
+          
+          // Calculate Instant Throughput (Speed since last log)
+          const intervalSeconds = (nowTime - lastLogTime) / 1000;
+          const messagesInInterval = completed - lastCompleted;
+          const instantTPS = (messagesInInterval / intervalSeconds).toFixed(0);
+          
+          // Calculate Average Throughput (Speed since start)
+          const averageTPS = (completed / totalElapsed).toFixed(0);
+
+          // Write to CSV
+          const csvRow = `${totalElapsed.toFixed(2)},${completed},${instantTPS},${averageTPS},${errors}\n`;
+          fs.appendFileSync(LOG_FILE, csvRow);
+          
+          process.stdout.write(`\r   ... ${completed} written. Instant: ${instantTPS}/s | Avg: ${averageTPS}/s | Err: ${errors}   `);
+
+          // Update tracking variables
+          lastLogTime = nowTime;
+          lastCompleted = completed;
+        }
+      } catch (err: any) {
+        errors++;
       }
-    ];
+    };
 
-    await client.batch(queries, { prepare: true });
-    
-    completed++;
-    if (completed % 50000 === 0) {
-      const elapsed = (Date.now() - startTime) / 1000;
-      const rate = (completed / elapsed).toFixed(0);
-      console.log(`   ... ${completed} written (${rate} msg/s)`);
+    const activePromises = new Set();
+
+    for (let i = 0; i < TOTAL_MESSAGES; i++) {
+      const promise = writeMessage();
+      activePromises.add(promise);
+      promise.finally(() => activePromises.delete(promise));
+      if (activePromises.size >= CONCURRENCY_LIMIT) await Promise.race(activePromises);
     }
-  };
 
-  // 3. Execution Loop (Sliding Window / Semaphore Pattern)
-  // This maintains exactly CONCURRENCY_LIMIT active promises at all times.
-  const activePromises = new Set();
+    await Promise.all(activePromises);
 
-  for (let i = 0; i < TOTAL_MESSAGES; i++) {
-    const promise = writeMessage();
+    const endTime = Date.now();
+    const duration = (endTime - startTime) / 1000;
     
-    // Add to pool
-    activePromises.add(promise);
-
-    // Clean up when finished
-    promise.then(() => activePromises.delete(promise));
-
-    // If pool is full, wait for the fastest one to finish
-    if (activePromises.size >= CONCURRENCY_LIMIT) {
-      await Promise.race(activePromises);
-    }
-  }
-
-  // 4. Wait for remaining stragglers
-  await Promise.all(activePromises);
-
-  const endTime = Date.now();
-  const duration = (endTime - startTime) / 1000;
-  
-  console.log('\n📊 Cassandra Results:');
-  console.log(`   Total Time: ${duration.toFixed(2)}s`);
-  console.log(`   Throughput: ${(TOTAL_MESSAGES / duration).toFixed(0)} messages/sec`);
-  console.log(`   Average Latency: ${(duration / TOTAL_MESSAGES * 1000).toFixed(2)}ms per message`);
-  
-  await client.shutdown();
-  console.log('\n👋 Disconnected from Cassandra');
-  } catch (error) {
-    console.error('\n❌ Error during stress test:', error);
+    console.log('\n\n📊 RESULTS:');
+    console.log(`   Total Time: ${duration.toFixed(2)}s`);
+    console.log(`   Throughput: ${(TOTAL_MESSAGES / duration).toFixed(0)} messages/sec`);
+    console.log(`   Data saved to: ${LOG_FILE}`);
+    
     await client.shutdown();
+  } catch (error) {
+    console.error('\n❌ Fatal Error:', error);
     process.exit(1);
   }
 }
 
-console.log('📝 Usage:');
-console.log('  ts-node stress-test-cassandra.ts [cassandra_host] [total_messages] [concurrency]');
-console.log('  OR set environment variables: CASSANDRA_HOST, TOTAL_MESSAGES, CONCURRENCY');
-console.log('\nExamples:');
-console.log('  ts-node stress-test-cassandra.ts 143.198.123.45');
-console.log('  ts-node stress-test-cassandra.ts 143.198.123.45 500000 1000');
-console.log('  CASSANDRA_HOST=143.198.123.45 TOTAL_MESSAGES=100000 ts-node stress-test-cassandra.ts\n');
-
-run().catch(console.error);
+run();
