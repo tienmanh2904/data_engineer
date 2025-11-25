@@ -80,7 +80,7 @@ export async function DELETE(req:Request,{ params }: { params: { serverId: strin
 
     // Verify ownership
     const serverResult = await db.execute(
-      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ?',
+      'SELECT * FROM servers_by_id WHERE id = ? AND profile_id = ? ALLOW FILTERING',
       [serverId, profile.id],
       { prepare: true }
     );
