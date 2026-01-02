@@ -13,6 +13,7 @@ This project has been enhanced with:
 
 - **[AUTHENTICATION_GUIDE.md](./AUTHENTICATION_GUIDE.md)** - Complete API documentation and usage guide
 - **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** - Implementation details and architecture
+- **[QUERIES_SUMMARY.md](./doc/QUERIES_SUMMARY.md)** - Technical explanation of database queries
 - **[schema.cql](./schema.cql)** - Full Cassandra database schema
 
 <h3>!!! --- WebSocket Polling Mode on Vercel --- !!!</h3>
@@ -21,278 +22,224 @@ This project has been enhanced with:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Build & Run Guide
 
-### Cloning the repository
+Follow these steps to set up the project locally.
+
+### Step 1: Clone & Install
+
 ```bash
+# Clone the repository
 git clone https://github.com/tienmanh2904/data_engineer.git
 cd data_engineer
-```
 
-### Install Dependencies
-```bash
+# Install dependencies
 npm install
+
+# Install specific dependencies if missing
+npm install cassandra-driver uuid
+npm install --save-dev @types/uuid
 ```
 
-### Setup Cassandra Database
+### Step 2: Cassandra Database Setup
+
+You need a running Cassandra instance. Docker is recommended.
+
 ```bash
-# Start Cassandra (Docker recommended)
+# Start Cassandra using Docker Compose
 docker-compose up -d
 
-# Wait 5 minutes
+# Wait ~5 minutes for initialization, then check status
 docker exec -it cassandra-1 nodetool status
-# Correct output will show 3 nodes with UN
-UN  172.18.0.2  75.5 KiB   16      100.0%            xxxx-xxxx-xxxx-xxxx                   rack1
-UN  172.18.0.3  75.5 KiB   16      100.0%            yyyy-yyyy-yyyy-yyyy                   rack1
-UN  172.18.0.4  75.5 KiB   16      100.0%
+# Expect 'UN' (Up/Normal) status for all nodes
 
-docker exec -it cassandra-1 ls -la /schema.cql
+# Initialize Schema
 docker exec -it cassandra-1 cqlsh -f /schema.cql
 ```
 
-### Setup Environment Variables (.env)
+**Verify Cassandra:**
 ```bash
-# Cassandra Database
-UPLOADTHING_SECRET=
-UPLOADTHING_APP_ID=
-
-# For Initialization Of Clerk Authentication
-
-JWT_SECRET=your-super-secret-key-here
-# For Live Video Streaming
-LIVEKIT_API_KEY=
-LIVEKIT_API_SECRET=
-NEXT_PUBLIC_LIVEKIT_URL=
+# Enter CQL shell
+docker exec -it cassandra-1 cqlsh -e "USE discord_app; DESCRIBE TABLES;"
 ```
 
-### Start the Development Server
+### Step 3: Clerk Authentication Setup
+
+Although the project has custom auth, Clerk is still used for some integrations or legacy support.
+
+1. **Create Account:** Go to [Clerk.com](https://clerk.com/) and sign up.
+2. **Create App:** Name it "Discord Clone". Enable Email, Google, GitHub.
+3. **Get API Keys:** From "API Keys" section:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+4. **Configure Paths:** In Clerk Dashboard → Paths:
+   - Sign-in: `/sign-in`
+   - Sign-up: `/sign-up`
+   - After sign-in/up: `/`
+
+### Step 4: UploadThing Setup (File Uploads)
+
+Handles avatars and attachments.
+
+1. **Create Account:** Go to [UploadThing](https://uploadthing.com/).
+2. **Create App:** Name it "discord-clone".
+3. **Get API Keys:** From "API Keys" tab:
+   - `UPLOADTHING_SECRET`
+   - `UPLOADTHING_APP_ID`
+
+### Step 5: LiveKit Setup (Video/Audio)
+
+Handles real-time voice and video channels.
+
+1. **Create Account:** Go to [LiveKit](https://livekit.io/).
+2. **Create Project:** Name it "Discord Clone".
+3. **Get API Keys:** From Settings → Keys:
+   - `LIVEKIT_API_KEY`
+   - `LIVEKIT_API_SECRET`
+   - `NEXT_PUBLIC_LIVEKIT_URL` (WebSocket URL)
+
+### Step 6: Environment Configuration
+
+Create a `.env` file in the root directory and fill in your keys:
+
+```env
+# Cassandra Database (No env needed for local docker default)
+
+# UploadThing
+UPLOADTHING_SECRET=sk_...
+UPLOADTHING_APP_ID=...
+
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+
+# Custom Auth
+JWT_SECRET=your-super-secret-key-here
+
+# LiveKit
+LIVEKIT_API_KEY=API...
+LIVEKIT_API_SECRET=whp...
+NEXT_PUBLIC_LIVEKIT_URL=wss://...
+```
+
+### Step 7: Run the Application
+
 ```bash
+# Development mode
 npm run dev
 ```
 
-Visit `http://localhost:3000` and create your account!
+Visit `http://localhost:3000` to see your app!
 
 ---
 
-## 🎯 New Features
+## ✅ Verify Setup
+
+Create a test file `test-cassandra.js` to verify database connectivity:
+
+```javascript
+const { Client } = require('cassandra-driver');
+
+const client = new Client({
+  contactPoints: ['localhost'],
+  localDataCenter: 'dc1',
+  keyspace: 'discord_app'
+});
+
+async function test() {
+  try {
+    await client.connect();
+    console.log('✅ Cassandra connection successful!');
+    await client.shutdown();
+  } catch (error) {
+    console.error('❌ Cassandra connection failed:', error.message);
+  }
+}
+test();
+```
+
+Run with `node test-cassandra.js`.
+
+---
+
+## 🔧 Troubleshooting
+
+### Cassandra Issues
+- **Container won't start:** Run `docker logs cassandra-1` to see errors. Try `docker-compose restart`.
+- **Connection refused:** Ensure port 9042 is exposed. Check `docker ps`.
+
+### Application Issues
+- **Clerk "Invalid API Key":** Check for extra spaces in `.env`.
+- **Upload fails:** Check file size (max 4MB Free Tier) and `UPLOADTHING_APP_ID`.
+- **Video not connecting:** Ensure `NEXT_PUBLIC_LIVEKIT_URL` starts with `wss://`.
+
+---
+
+## 🎯 New Features & API
 
 ### Authentication System
-- **Register**: Create account with username, email, and password
-- **Login**: Secure JWT-based authentication
-- **Session Management**: HTTP-only cookies for security
-- **Route Protection**: Middleware-based authentication
+- **Register**: `POST /api/auth/register`
+- **Login**: `POST /api/auth/login`
+- **Session**: `GET /api/auth/session`
 
 ### Friend System
-- **Send Friend Requests** by username
-- **Accept/Reject Requests** from other users
-- **View Friends List** with user details
-- **Remove Friends** when needed
-- **Cancel Sent Requests** before acceptance
-
----
-
-## 📡 API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Create new account
-- `POST /api/auth/login` - Login and get JWT token
-- `POST /api/auth/logout` - Logout current user
-- `GET /api/auth/session` - Get current session
-
-### Friends
-- `GET /api/friends` - Get all friends
-- `DELETE /api/friends/[friendId]` - Remove a friend
-
-### Friend Requests
-- `POST /api/friends/requests` - Send friend request
-- `GET /api/friends/requests` - Get all requests (sent & received)
-- `PATCH /api/friends/requests/[requestId]` - Accept/reject request
-- `DELETE /api/friends/requests/[requestId]` - Cancel request
+- **Send Request**: `POST /api/friends/requests`
+- **Manage Requests**: `GET`, `PATCH`, `DELETE` /api/friends/requests/[id]
+- **List Friends**: `GET /api/friends`
 
 Full API documentation: [AUTHENTICATION_GUIDE.md](./AUTHENTICATION_GUIDE.md)
 
 ---
 
-## 🗄️ Database Schema
+## 🗄️ Database Schema overview
 
-This project uses **Apache Cassandra** for scalability and performance. The schema includes:
+This project uses **Apache Cassandra**.
 
-### User Tables
-- `users_by_id` - Main user storage
-- `users_by_username` - Login lookups
-- `users_by_email` - Email lookups
-
-### Friend Tables
-- `friend_requests_by_id` - Main request storage
-- `friend_requests_by_sender` - Sent requests view
-- `friend_requests_by_receiver` - Received requests view
-- `friend_requests_by_users` - Quick existence check
-- `friends_by_user` - Friends list per user
-
-### Server Tables
-- `servers_by_id`, `servers_by_profile`, `servers_by_invite_code`
-- `channels_by_id`, `channels_by_server`
-- `members_by_id`, `members_by_server`, `members_by_profile_and_server`
-
-### Messaging Tables
-- `messages_by_id`, `messages_by_channel`
-- `direct_messages_by_id`, `direct_messages_by_conversation`
-- `conversations_by_id`, `conversations_by_members`
+- **Users**: `users_by_id`, `users_by_username`, `users_by_email`
+- **Friends**: `friend_requests_*`, `friends_by_user`
+- **Servers**: `servers_by_*`, `channels_by_*`, `members_by_*`
+- **Messages**: `messages_by_*`, `direct_messages_by_*`
 
 View full schema: [schema.cql](./schema.cql)
 
 ---
 
-## 🧪 Testing the Friend System
+## 🧪 Testing
 
 Use the provided test script:
 
 ```typescript
-// In browser console or Node.js
 import { runFullTest } from './test-friend-system';
-
-// Run complete test flow
 await runFullTest();
-
-// Or test individual functions
-import { testRegister, testLogin, testSendFriendRequest } from './test-friend-system';
-
-await testRegister('username', 'email@example.com', 'password');
-await testLogin('username', 'password');
-await testSendFriendRequest('friendUsername');
 ```
-
----
-
-## 🔒 Security Features
-
-- **Password Hashing**: bcryptjs with 10 rounds
-- **JWT Tokens**: Signed with secret key, 7-day expiration
-- **HTTP-only Cookies**: Protection against XSS attacks
-- **CSRF Protection**: SameSite cookie policy
-- **Route Middleware**: Automatic authentication checks
-- **Input Validation**: Server-side validation on all endpoints
 
 ---
 
 ## 📦 Technology Stack
 
 - **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
-- **Authentication**: Custom JWT-based auth (bcrypt + jsonwebtoken)
-- **Database**: Apache Cassandra (cassandra-driver)
-- **File Upload**: UploadThing
-- **Video/Audio**: LiveKit
-- **Real-time**: Socket.IO
-- **UI Components**: Radix UI, shadcn/ui
-- **State Management**: Zustand
-- **Forms**: React Hook Form + Zod
+- **Authentication**: Custom JWT + Clerk (Legacy/Integration)
+- **Database**: Apache Cassandra
+- **Real-time**: Socket.IO, LiveKit
 
 ---
 
-## 🛠️ Development
+## Service Dashboards
 
-### Project Structure
-```
-app/
-  ├── (auth)/              # Authentication pages
-  ├── (main)/              # Main application
-  ├── api/
-  │   ├── auth/           # Auth endpoints
-  │   ├── friends/        # Friend system endpoints
-  │   ├── server/         # Server management
-  │   └── messages/       # Messaging
-components/
-  ├── modals/             # Modal components
-  ├── navigation/         # Navigation UI
-  ├── server/             # Server components
-  └── ui/                 # Reusable UI components
-lib/
-  ├── currentProfile.ts   # Session management
-  ├── db.ts              # Cassandra connection
-  └── utils.ts           # Utility functions
-types/
-  ├── cassandra.ts       # Database types
-  ├── friends.ts         # Friend system types
-  └── ServerType.ts      # Server types
-```
-
-### Adding New Features
-
-1. **Database**: Update `schema.cql` with new tables
-2. **Types**: Add TypeScript types in `types/`
-3. **API**: Create routes in `app/api/`
-4. **Components**: Build UI in `components/`
-5. **Documentation**: Update relevant .md files
+- **Clerk**: [dashboard.clerk.com](https://dashboard.clerk.com/)
+- **UploadThing**: [uploadthing.com/dashboard](https://uploadthing.com/dashboard)
+- **LiveKit**: [cloud.livekit.io](https://cloud.livekit.io/)
 
 ---
 
-## 🚀 Deployment
-
-### Cassandra Setup
-For production, use:
-- [DataStax Astra DB](https://astra.datastax.com/) (Managed Cassandra)
-- Self-hosted Cassandra cluster
-- Docker Compose with multiple nodes
-
-### Environment Variables
-Make sure to set strong production values for:
-- `JWT_SECRET` - Use a cryptographically secure random string
-- Database credentials
-- API keys for third-party services
-
-### Next.js Deployment
-Deploy to Vercel, AWS, or any Node.js hosting:
-```bash
-npm run build
-npm start
-```
-
----
-
-## 📝 Migration from Clerk
-
-If you have existing Clerk data:
-
-1. Export user data from Clerk
-2. Create migration script to populate `users_by_*` tables
-3. Update all Clerk auth() calls to use currentProfile()
-4. Remove Clerk dependencies: `npm uninstall @clerk/nextjs`
-5. Test authentication flow thoroughly
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
----
-
-## 📄 License
-
-This project is open source and available under the MIT License.
-
----
-
-## 🙏 Credits
+## 📄 License & Credits
 
 - Original Discord Clone: [Code With Antonio](https://www.youtube.com/@codewithantonio)
-- Custom Auth & Friends: Enhanced by tienmanh2904
-- Database Migration: Cassandra implementation
-
----
-
-## 📞 Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Check documentation files in the repository
-- Review [AUTHENTICATION_GUIDE.md](./AUTHENTICATION_GUIDE.md) for detailed API docs
-
----
+- Open Source under MIT License
+- Enhanced by tienmanh2904
 
 **Happy Coding! 🎉**
