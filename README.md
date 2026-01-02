@@ -3,7 +3,7 @@
 <h2>🎉 NEW: Custom Authentication & Friend Management System</h2>
 
 This project has been enhanced with:
-- ✅ **Custom JWT-based authentication** (replacing Clerk)
+- ✅ **Custom JWT-based authentication**
 - ✅ **Username/password registration and login**
 - ✅ **Friend request system** (send, accept, reject, cancel)
 - ✅ **Friends list management** with Cassandra database
@@ -63,21 +63,7 @@ docker exec -it cassandra-1 cqlsh -f /schema.cql
 docker exec -it cassandra-1 cqlsh -e "USE discord_app; DESCRIBE TABLES;"
 ```
 
-### Step 3: Clerk Authentication Setup
-
-Although the project has custom auth, Clerk is still used for some integrations or legacy support.
-
-1. **Create Account:** Go to [Clerk.com](https://clerk.com/) and sign up.
-2. **Create App:** Name it "Discord Clone". Enable Email, Google, GitHub.
-3. **Get API Keys:** From "API Keys" section:
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-   - `CLERK_SECRET_KEY`
-4. **Configure Paths:** In Clerk Dashboard → Paths:
-   - Sign-in: `/sign-in`
-   - Sign-up: `/sign-up`
-   - After sign-in/up: `/`
-
-### Step 4: UploadThing Setup (File Uploads)
+### Step 3: UploadThing Setup (File Uploads)
 
 Handles avatars and attachments.
 
@@ -87,7 +73,7 @@ Handles avatars and attachments.
    - `UPLOADTHING_SECRET`
    - `UPLOADTHING_APP_ID`
 
-### Step 5: LiveKit Setup (Video/Audio)
+### Step 4: LiveKit Setup (Video/Audio)
 
 Handles real-time voice and video channels.
 
@@ -98,7 +84,7 @@ Handles real-time voice and video channels.
    - `LIVEKIT_API_SECRET`
    - `NEXT_PUBLIC_LIVEKIT_URL` (WebSocket URL)
 
-### Step 6: Environment Configuration
+### Step 5: Environment Configuration
 
 Create a `.env` file in the root directory and fill in your keys:
 
@@ -109,14 +95,6 @@ Create a `.env` file in the root directory and fill in your keys:
 UPLOADTHING_SECRET=sk_...
 UPLOADTHING_APP_ID=...
 
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
-
 # Custom Auth
 JWT_SECRET=your-super-secret-key-here
 
@@ -126,7 +104,7 @@ LIVEKIT_API_SECRET=whp...
 NEXT_PUBLIC_LIVEKIT_URL=wss://...
 ```
 
-### Step 7: Run the Application
+### Step 6: Run the Application
 
 ```bash
 # Development mode
@@ -173,7 +151,6 @@ Run with `node test-cassandra.js`.
 - **Connection refused:** Ensure port 9042 is exposed. Check `docker ps`.
 
 ### Application Issues
-- **Clerk "Invalid API Key":** Check for extra spaces in `.env`.
 - **Upload fails:** Check file size (max 4MB Free Tier) and `UPLOADTHING_APP_ID`.
 - **Video not connecting:** Ensure `NEXT_PUBLIC_LIVEKIT_URL` starts with `wss://`.
 
@@ -222,7 +199,7 @@ await runFullTest();
 ## 📦 Technology Stack
 
 - **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
-- **Authentication**: Custom JWT + Clerk (Legacy/Integration)
+- **Authentication**: Custom JWT
 - **Database**: Apache Cassandra
 - **Real-time**: Socket.IO, LiveKit
 
@@ -230,7 +207,6 @@ await runFullTest();
 
 ## Service Dashboards
 
-- **Clerk**: [dashboard.clerk.com](https://dashboard.clerk.com/)
 - **UploadThing**: [uploadthing.com/dashboard](https://uploadthing.com/dashboard)
 - **LiveKit**: [cloud.livekit.io](https://cloud.livekit.io/)
 
