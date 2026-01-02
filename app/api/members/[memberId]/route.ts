@@ -66,6 +66,15 @@ export async function PATCH(
     const memberProfile = profileResult.rows[0];
     const now = new Date();
 
+    // Get joined_at for servers_by_profile update
+    const serverByProfileResult = await db.execute(
+      'SELECT joined_at FROM servers_by_profile WHERE profile_id = ? AND server_id = ? ALLOW FILTERING',
+      [member.profile_id, serverId],
+      { prepare: true }
+    );
+
+    const joinedAt = serverByProfileResult.rows[0]?.joined_at;
+
     // Update member role in multiple tables
     const queries = [
       {
@@ -73,18 +82,22 @@ export async function PATCH(
         params: [role, now, memberId]
       },
       {
-        query: 'UPDATE members_by_server SET role = ?, updated_at = ? WHERE server_id = ? AND id = ?',
-        params: [role, now, serverId, memberId]
+        query: 'UPDATE members_by_server SET role = ?, updated_at = ? WHERE server_id = ? AND role = ? AND id = ?',
+        params: [role, now, serverId, member.role, memberId]
       },
       {
         query: 'UPDATE members_by_profile_and_server SET role = ?, updated_at = ? WHERE profile_id = ? AND server_id = ?',
         params: [role, now, member.profile_id, serverId]
-      },
-      {
-        query: 'UPDATE servers_by_profile SET member_role = ? WHERE profile_id = ? AND server_id = ?',
-        params: [role, member.profile_id, serverId]
       }
     ];
+
+    // Only add servers_by_profile update if we found the record
+    if (joinedAt) {
+      queries.push({
+        query: 'UPDATE servers_by_profile SET member_role = ? WHERE profile_id = ? AND joined_at = ? AND server_id = ?',
+        params: [role, member.profile_id, joinedAt, serverId]
+      });
+    }
 
     await db.batch(queries, { prepare: true });
 
@@ -178,6 +191,15 @@ export async function DELETE(
       return new NextResponse("Cannot kick yourself", { status: 403 });
     }
 
+    // Get joined_at for servers_by_profile deletion
+    const serverByProfileResult = await db.execute(
+      'SELECT joined_at FROM servers_by_profile WHERE profile_id = ? AND server_id = ? ALLOW FILTERING',
+      [member.profile_id, serverId],
+      { prepare: true }
+    );
+
+    const joinedAt = serverByProfileResult.rows[0]?.joined_at;
+
     // Delete member from multiple tables
     const queries = [
       {
@@ -185,18 +207,22 @@ export async function DELETE(
         params: [memberId]
       },
       {
-        query: 'DELETE FROM members_by_server WHERE server_id = ? AND id = ?',
-        params: [serverId, memberId]
+        query: 'DELETE FROM members_by_server WHERE server_id = ? AND role = ? AND id = ?',
+        params: [serverId, member.role, memberId]
       },
       {
         query: 'DELETE FROM members_by_profile_and_server WHERE profile_id = ? AND server_id = ?',
         params: [member.profile_id, serverId]
-      },
-      {
-        query: 'DELETE FROM servers_by_profile WHERE profile_id = ? AND server_id = ?',
-        params: [member.profile_id, serverId]
       }
     ];
+
+    // Only add servers_by_profile deletion if we found the record
+    if (joinedAt) {
+      queries.push({
+        query: 'DELETE FROM servers_by_profile WHERE profile_id = ? AND joined_at = ? AND server_id = ?',
+        params: [member.profile_id, joinedAt, serverId]
+      });
+    }
 
     await db.batch(queries, { prepare: true });
 

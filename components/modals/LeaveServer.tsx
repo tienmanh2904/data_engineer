@@ -24,12 +24,13 @@ const LeaveServer = () => {
     try {
       setLoading(true);
       await axios.patch(`/api/server/${server?.id}/leave`);
+      // Close modal and navigate immediately for better UX
       onClose();
-      router.refresh();
       router.push("/");
+      // Refresh in background to update server list
+      setTimeout(() => router.refresh(), 100);
     } catch (error) {
       console.log(error);
-    } finally {
       setLoading(false);
     }
   };

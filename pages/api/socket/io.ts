@@ -9,21 +9,22 @@ export const config = {
   },
 };
 
-if (!res.socket) {
-  return res.end();
-}
+const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIO) => {
+  if (!res.socket) {
+    return res.end();
+  }
 
-const httpServer: NetServer = res.socket.server as any;
+  const httpServer: NetServer & { io?: ServerIO } = res.socket.server as any;
 
-if (!httpServer.io) {
-  const path = "/api/socket/io";
-  const io = new ServerIO(httpServer, {
-    path: path,
-    addTrailingSlash: false,
-  });
-  httpServer.io = io;
-}
-res.end();
+  if (!httpServer.io) {
+    const path = "/api/socket/io";
+    const io = new ServerIO(httpServer, {
+      path: path,
+      addTrailingSlash: false,
+    });
+    httpServer.io = io;
+  }
+  res.end();
 };
 
 export default ioHandler;

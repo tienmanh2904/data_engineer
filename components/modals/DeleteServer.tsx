@@ -24,12 +24,13 @@ const DeleteServer = () => {
     try {
       setLoading(true);
       await axios.delete(`/api/server/${server?.id}`);
+      // Close modal and navigate immediately for better UX
       onClose();
-      router.refresh();
       router.push("/");
+      // Refresh in background to update server list
+      setTimeout(() => router.refresh(), 100);
     } catch (error) {
       console.log(error);
-    } finally {
       setLoading(false);
     }
   };
