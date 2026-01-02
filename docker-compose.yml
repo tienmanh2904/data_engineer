@@ -1,53 +1,92 @@
-version: '3'
-
 services:
-  # CASSANDRA NODE 1 (SEED NODE)
   cassandra-1:
     image: cassandra:4.1
+    mem_limit: 2G
     container_name: cassandra-1
-    restart: always
-    
-    # CRITICAL SETTING: Host Networking
-    # This removes Docker's network isolation so the container can 
-    # see and bind to the specific Private IP (eth1) of the Droplet.
-    network_mode: host
-    
-    environment:
-      # --- CLUSTER CONFIG ---
-      - CASSANDRA_CLUSTER_NAME=ChatAppCluster
-      - CASSANDRA_DC=dc1
-      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
-      - CASSANDRA_NUM_TOKENS=256
-
-      # --- NETWORK BINDING (Internal) ---
-      # Bind listener strictly to the Private IP (Free bandwidth, Secure)
-      - CASSANDRA_LISTEN_ADDRESS=10.104.0.2
-      - CASSANDRA_BROADCAST_ADDRESS=10.104.0.2
-      
-      # --- SEED CONFIG ---
-      # I am the first seed. Point to myself.
-      - CASSANDRA_SEEDS=10.104.0.2
-
-      # --- CLIENT ACCESS (External) ---
-      # Listen for clients on all interfaces (0.0.0.0)
-      - CASSANDRA_RPC_ADDRESS=0.0.0.0
-      # Tell your Laptop (the client) to talk to the PUBLIC IP
-      - CASSANDRA_BROADCAST_RPC_ADDRESS=159.223.51.176
-
-      # --- MEMORY TUNING (16GB Server) ---
-      # We allocate 8GB to DB, leaving 8GB for Next.js & OS
-      - MAX_HEAP_SIZE=8G
-      - HEAP_NEWSIZE=2G
-    
+    hostname: cassandra-1
+    ports:
+      - "9042:9042"
     volumes:
-      - cassandra-data:/var/lib/cassandra
-
-    # Healthcheck to verify node is up
+      - cassandra-1-data:/var/lib/cassandra
+      - ./schema.cql:/schema.cql:ro
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ChatAppCluster
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_DC=dc1
+      - CASSANDRA_DC=dc1
+      - CASSANDRA_RACK=rack1
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=512M
+    networks:
+      - cassandra-net
     healthcheck:
-      test: ["CMD", "cqlsh", "10.104.0.2", "-e", "describe keyspaces"]
+      test: ["CMD-SHELL", "nodetool status"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 90s
+
+  cassandra-2:
+    image: cassandra:4.1
+    mem_limit: 2G
+    container_name: cassandra-2
+    hostname: cassandra-2
+    volumes:
+      - cassandra-2-data:/var/lib/cassandra
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ChatAppCluster
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_DC=dc1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_SEEDS=cassandra-1
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=512M
+    networks:
+      - cassandra-net
+    depends_on:
+      cassandra-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -q '^U[NJ]' && cqlsh -e 'SELECT now() FROM system.local' > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  cassandra-3:
+    image: cassandra:4.1
+    mem_limit: 2G
+    container_name: cassandra-3
+    hostname: cassandra-3
+    volumes:
+      - cassandra-3-data:/var/lib/cassandra
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ChatAppCluster
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_DC=dc1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_SEEDS=cassandra-1
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=512M
+    networks:
+      - cassandra-net
+    depends_on:
+      cassandra-1:
+        condition: service_healthy
+      cassandra-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -q '^U[NJ]' && cqlsh -e 'SELECT now() FROM system.local' > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+networks:
+  cassandra-net:
+    driver: bridge
 
 volumes:
-  cassandra-data:
+  cassandra-1-data:
+  cassandra-2-data:
+  cassandra-3-data:

@@ -108,6 +108,7 @@ NEXT_PUBLIC_LIVEKIT_URL=wss://...
 
 ```bash
 # Development mode
+npm run build
 npm run dev
 ```
 

@@ -23,24 +23,24 @@ const Page = async ({ params, searchParams }: PageProps) => {
   if (!profile) {
     return redirect("/sign-in");
   }
-  
+
   // Get current member
   const currentMemberResult = await db.execute(
     'SELECT * FROM members_by_profile_and_server WHERE server_id = ? AND profile_id = ?',
     [params.serverId, profile.id],
     { prepare: true }
   );
-  
+
   if (currentMemberResult.rows.length === 0) {
     return redirect("/");
   }
-  
+
   const currentMemberRow = currentMemberResult.rows[0];
   const currentMember = {
-    id: currentMemberRow.id,
+    id: currentMemberRow.id.toString(),
     role: currentMemberRow.role,
-    profileId: currentMemberRow.profile_id,
-    serverId: currentMemberRow.server_id,
+    profileId: currentMemberRow.profile_id.toString(),
+    serverId: currentMemberRow.server_id.toString(),
     createdAt: currentMemberRow.created_at,
     updatedAt: currentMemberRow.updated_at,
     profile: {
@@ -53,16 +53,16 @@ const Page = async ({ params, searchParams }: PageProps) => {
       updatedAt: profile.updatedAt
     }
   };
-  
+
   const conversation = await getOrCreateConversation(
     currentMember.id,
     params.memberId
   );
-  
+
   if (!conversation) {
     return redirect(`/servers/${params.serverId}`);
   }
-  
+
   const { memberOne, memberTwo } = conversation;
   const otherMember =
     memberOne.profileId === profile.id ? memberTwo : memberOne;
